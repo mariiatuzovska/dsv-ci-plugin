@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 )
@@ -42,7 +42,7 @@ func run() error {
 		return fmt.Errorf("POST https://%s/v1/token error: %d", *server, tokenResp.StatusCode)
 	}
 
-	body, _ = ioutil.ReadAll(tokenResp.Body)
+	body, _ = io.ReadAll(tokenResp.Body)
 	tokenRespData := make(map[string]interface{})
 	json.Unmarshal(body, &tokenRespData)
 
@@ -67,7 +67,7 @@ func run() error {
 		return fmt.Errorf("GET https://%s/v1/secrets/%s error: %d", *server, *secretPath, secretResp.StatusCode)
 	}
 
-	body, _ = ioutil.ReadAll(secretResp.Body)
+	body, _ = io.ReadAll(secretResp.Body)
 	secretRespData := make(map[string]interface{})
 	json.Unmarshal(body, &secretRespData)
 
