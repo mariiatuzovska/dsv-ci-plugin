@@ -52,7 +52,7 @@ func run() error {
 	}
 
 	// getting secret
-	secretRequest, err := http.NewRequest(http.MethodGet, "https://"+*server+"/v1/secrets/"+*secretPath, bytes.NewBuffer(body))
+	secretRequest, err := http.NewRequest(http.MethodGet, "https://"+*server+"/v1/secrets/"+*secretPath, nil)
 	if err != nil {
 		return err
 	}
