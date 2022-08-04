@@ -81,6 +81,7 @@ func run() error {
 	}
 
 	actionSetOutput("secretVal", secretValue)
+	actionExportVariable("secretEnvVal", secretValue)
 	return nil
 }
 
@@ -90,6 +91,31 @@ func actionError(err error) {
 	fmt.Printf("::error::%v\n", err)
 }
 
+func actionStringError(err string) {
+	fmt.Printf("::error::%s\n", err)
+}
+
 func actionSetOutput(key, val string) {
 	fmt.Printf("::set-output name=%s::%s\n", key, val)
+}
+
+func actionExportVariable(key, val string) {
+	envFile := os.Getenv("GITHUB_ENV")
+	if envFile == "" {
+		actionStringError("GITHUB_ENV environment file is not defined")
+		return
+	}
+
+	f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		actionError(fmt.Errorf("could not open GITHUB_ENV environment file: %v", err))
+		return
+	}
+
+	defer f.Close()
+
+	if _, err = f.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
+		actionError(fmt.Errorf("could not update GITHUB_ENV environment file: %v", err))
+		return
+	}
 }
