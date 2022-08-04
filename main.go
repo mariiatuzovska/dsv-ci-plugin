@@ -51,7 +51,7 @@ func run() error {
 		return err
 	}
 	if tokenResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("POST %s/token error: %d", apiEndpoint, tokenResp.StatusCode)
+		return fmt.Errorf("POST %s/token error: %s", apiEndpoint, tokenResp.Status)
 	}
 
 	body, _ = io.ReadAll(tokenResp.Body)
@@ -76,7 +76,7 @@ func run() error {
 		return err
 	}
 	if secretResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s/secrets/%s error: %d", apiEndpoint, *secretPath, secretResp.StatusCode)
+		return fmt.Errorf("GET %s/secrets/%s error: %s", apiEndpoint, *secretPath, secretResp.Status)
 	}
 
 	body, _ = io.ReadAll(secretResp.Body)
