@@ -38,7 +38,7 @@ func run() error {
 
 	httpClient := &http.Client{Timeout: DefaultTimeout}
 
-	log.Print("🔐 Fetching access token...")
+	log.Print("🔑 Fetching access token...")
 
 	token, err := dsvGetToken(httpClient, apiEndpoint, *clientId, *clientSecret)
 	if err != nil {
