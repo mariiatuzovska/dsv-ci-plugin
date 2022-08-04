@@ -33,6 +33,8 @@ func main() {
 }
 
 func run() error {
+	apiEndpoint := fmt.Sprintf("https://%s/v1", *server)
+
 	httpClient := &http.Client{
 		Timeout: DefaultTimeout,
 	}
@@ -44,12 +46,12 @@ func run() error {
 		"client_secret":	"%s"
 	}`, *clientId, *clientSecret))
 
-	tokenResp, err := httpClient.Post("https://"+*server+"/v1/token", "application/json", bytes.NewBuffer(body))
+	tokenResp, err := httpClient.Post(apiEndpoint+"/token", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	if tokenResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("POST https://%s/v1/token error: %d", *server, tokenResp.StatusCode)
+		return fmt.Errorf("POST %s/token error: %d", apiEndpoint, tokenResp.StatusCode)
 	}
 
 	body, _ = io.ReadAll(tokenResp.Body)
@@ -62,7 +64,7 @@ func run() error {
 	}
 
 	// getting secret
-	secretRequest, err := http.NewRequest(http.MethodGet, "https://"+*server+"/v1/secrets/"+*secretPath, nil)
+	secretRequest, err := http.NewRequest(http.MethodGet, apiEndpoint+"/secrets/"+*secretPath, nil)
 	if err != nil {
 		return err
 	}
@@ -74,7 +76,7 @@ func run() error {
 		return err
 	}
 	if secretResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET https://%s/v1/secrets/%s error: %d", *server, *secretPath, secretResp.StatusCode)
+		return fmt.Errorf("GET %s/secrets/%s error: %d", apiEndpoint, *secretPath, secretResp.StatusCode)
 	}
 
 	body, _ = io.ReadAll(secretResp.Body)
