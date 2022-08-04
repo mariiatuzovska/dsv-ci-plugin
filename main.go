@@ -91,8 +91,8 @@ func actionError(err error) {
 	fmt.Printf("::error::%v\n", err)
 }
 
-func actionStringError(err string) {
-	fmt.Printf("::error::%s\n", err)
+func actionStringError(s string) {
+	fmt.Printf("::error::%s\n", s)
 }
 
 func actionSetOutput(key, val string) {
@@ -106,12 +106,11 @@ func actionExportVariable(key, val string) {
 		return
 	}
 
-	f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		actionError(fmt.Errorf("could not open GITHUB_ENV environment file: %v", err))
 		return
 	}
-
 	defer f.Close()
 
 	if _, err = f.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
