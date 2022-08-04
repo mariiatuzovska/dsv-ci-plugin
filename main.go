@@ -8,6 +8,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
+)
+
+const (
+	// DefaultTimeout defines default timeout for HTTP requests.
+	DefaultTimeout = time.Second * 5
 )
 
 var (
@@ -27,6 +33,10 @@ func main() {
 }
 
 func run() error {
+	httpClient := &http.Client{
+		Timeout: DefaultTimeout,
+	}
+
 	// getting access token
 	body := []byte(fmt.Sprintf(`{
 		"grant_type":		"client_credentials",
@@ -34,7 +44,7 @@ func run() error {
 		"client_secret":	"%s"
 	}`, *clientId, *clientSecret))
 
-	tokenResp, err := http.Post("https://"+*server+"/v1/token", "application/json", bytes.NewBuffer(body))
+	tokenResp, err := httpClient.Post("https://"+*server+"/v1/token", "application/json", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -59,7 +69,7 @@ func run() error {
 	secretRequest.Header.Set("Content-Type", "application/json")
 	secretRequest.Header.Set("Authorization", token)
 
-	secretResp, err := new(http.Client).Do(secretRequest)
+	secretResp, err := httpClient.Do(secretRequest)
 	if err != nil {
 		return err
 	}
