@@ -34,6 +34,8 @@ func main() {
 }
 
 func run() error {
+	// TODO: add input validation.
+
 	apiEndpoint := fmt.Sprintf("https://%s/v1", *server)
 
 	httpClient := &http.Client{Timeout: DefaultTimeout}
