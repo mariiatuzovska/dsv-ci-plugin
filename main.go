@@ -38,14 +38,14 @@ func run() error {
 
 	httpClient := &http.Client{Timeout: DefaultTimeout}
 
-	log.Print("Fetching access token...")
+	log.Print(":key: Fetching access token...")
 
 	token, err := dsvGetToken(httpClient, apiEndpoint, *clientId, *clientSecret)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	log.Print("Fetching secret from DSV...")
+	log.Print(":memo: Fetching secret from DSV...")
 
 	secret, err := dsvGetSecret(httpClient, apiEndpoint, token, *secretPath)
 	if err != nil {
