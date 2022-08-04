@@ -19,7 +19,7 @@ const (
 var (
 	server        = flag.String("server", "", "Secret server")
 	clientId      = flag.String("clientId", "", "Client ID")
-	clientSecret  = flag.String("clientSecret", "", "Client secret")
+	clientSecret  = flag.String("clientSecret", "", "Client Secret")
 	secretPath    = flag.String("secretPath", "", "Secret path")
 	secretDataKey = flag.String("secretDataKey", "", "Field name for a value to be retrieved from thr secret data for a given secret by secretPath")
 )
@@ -35,58 +35,23 @@ func main() {
 func run() error {
 	apiEndpoint := fmt.Sprintf("https://%s/v1", *server)
 
-	httpClient := &http.Client{
-		Timeout: DefaultTimeout,
-	}
+	httpClient := &http.Client{Timeout: DefaultTimeout}
 
-	// getting access token
-	body := []byte(fmt.Sprintf(`{
-		"grant_type":		"client_credentials",
-		"client_id":		"%s",
-		"client_secret":	"%s"
-	}`, *clientId, *clientSecret))
-
-	tokenResp, err := httpClient.Post(apiEndpoint+"/token", "application/json", bytes.NewBuffer(body))
+	token, err := dsvGetToken(httpClient, apiEndpoint, *clientId, *clientSecret)
 	if err != nil {
-		return err
-	}
-	if tokenResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("POST %s/token error: %s", apiEndpoint, tokenResp.Status)
+		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	body, _ = io.ReadAll(tokenResp.Body)
-	tokenRespData := make(map[string]interface{})
-	json.Unmarshal(body, &tokenRespData)
-
-	token, strExists := tokenRespData["accessToken"].(string)
-	if !strExists {
-		return fmt.Errorf("cannot get access token")
-	}
-
-	// getting secret
-	secretRequest, err := http.NewRequest(http.MethodGet, apiEndpoint+"/secrets/"+*secretPath, nil)
+	secret, err := dsvGetSecret(httpClient, apiEndpoint, token, *secretPath)
 	if err != nil {
-		return err
-	}
-	secretRequest.Header.Set("Content-Type", "application/json")
-	secretRequest.Header.Set("Authorization", token)
-
-	secretResp, err := httpClient.Do(secretRequest)
-	if err != nil {
-		return err
-	}
-	if secretResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s/secrets/%s error: %s", apiEndpoint, *secretPath, secretResp.Status)
+		return fmt.Errorf("failed to fetch secret from DSV: %v", err)
 	}
 
-	body, _ = io.ReadAll(secretResp.Body)
-	secretRespData := make(map[string]interface{})
-	json.Unmarshal(body, &secretRespData)
-
-	secretData, dataExists := secretRespData["data"].(map[string]interface{})
+	secretData, dataExists := secret["data"].(map[string]interface{})
 	if !dataExists {
 		return fmt.Errorf("cannot get secret data from '%s' secret", *secretPath)
 	}
+
 	secretValue, valExists := secretData[*secretDataKey].(string)
 	if !valExists {
 		return fmt.Errorf("cannot get '%s' from '%s' secret data", *secretDataKey, *secretPath)
@@ -94,10 +59,79 @@ func run() error {
 
 	actionSetOutput("secretVal", secretValue)
 	actionExportVariable("secretEnvVal", secretValue)
+
 	return nil
 }
 
-// Workflow commands:
+func dsvGetToken(c *http.Client, apiEndpoint, cid, csecret string) (string, error) {
+	body := []byte(fmt.Sprintf(
+		`{"grant_type":"client_credentials","client_id":"%s","client_secret":"%s"}`,
+		*clientId, *clientSecret,
+	))
+	endpoint := apiEndpoint + "/token"
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("could not build request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Delinea-DSV-Client", "gh-action")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("API call failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("POST %s: %s", endpoint, resp.Status)
+	}
+
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("could not read response body: %v", err)
+	}
+	tokenRespData := make(map[string]interface{})
+	err = json.Unmarshal(body, &tokenRespData)
+	if err != nil {
+		return "", fmt.Errorf("could not unmarshal response body: %v", err)
+	}
+
+	token, strExists := tokenRespData["accessToken"].(string)
+	if !strExists {
+		return "", fmt.Errorf("could not read access token from response")
+	}
+	return token, nil
+}
+
+func dsvGetSecret(c *http.Client, apiEndpoint, accessToken, secretPath string) (map[string]interface{}, error) {
+	endpoint := apiEndpoint + "/secrets/" + secretPath
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("could not build request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Delinea-DSV-Client", "gh-action")
+	req.Header.Set("Authorization", accessToken)
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("API call failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", endpoint, resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("could not read response body: %v", err)
+	}
+	secret := make(map[string]interface{})
+	err = json.Unmarshal(body, &secret)
+	if err != nil {
+		return nil, fmt.Errorf("could not unmarshal response body: %v", err)
+	}
+	return secret, nil
+}
 
 func actionError(err error) {
 	fmt.Printf("::error::%v\n", err)
