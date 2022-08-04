@@ -21,7 +21,7 @@ var (
 func main() {
 	flag.Parse()
 	if err := run(); err != nil {
-		fmt.Printf("%v\n", err)
+		actionError(err)
 		os.Exit(1)
 	}
 }
@@ -80,6 +80,16 @@ func run() error {
 		return fmt.Errorf("cannot get '%s' from '%s' secret data", *secretDataKey, *secretPath)
 	}
 
-	fmt.Printf("::set-output name=secretVal::%s\n", secretValue)
+	actionSetOutput("secretVal", secretValue)
 	return nil
+}
+
+// Workflow commands:
+
+func actionError(err error) {
+	fmt.Printf("::error::%v\n", err)
+}
+
+func actionSetOutput(key, val string) {
+	fmt.Printf("::set-output name=%s::%s\n", key, val)
 }
