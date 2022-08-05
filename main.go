@@ -9,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -18,11 +20,11 @@ const (
 )
 
 var (
-	server        = flag.String("server", "", "Secret server")
-	clientId      = flag.String("clientId", "", "Client ID")
-	clientSecret  = flag.String("clientSecret", "", "Client Secret")
-	secretPath    = flag.String("secretPath", "", "Secret path")
-	secretDataKey = flag.String("secretDataKey", "", "Field name for a value to be retrieved from thr secret data for a given secret by secretPath")
+	server       = flag.String("server", "", "Secret server")
+	clientId     = flag.String("clientId", "", "Client ID")
+	clientSecret = flag.String("clientSecret", "", "Client Secret")
+	setEnv       = flag.Bool("setEnv", false, "Specifies to set or do not set environment")
+	retrieve     = flag.String("retrieve", "", "Secret paths and data keys")
 )
 
 func main() {
@@ -34,7 +36,13 @@ func main() {
 }
 
 func run() error {
-	// TODO: add input validation.
+	if err := validateInput(); err != nil {
+		return err
+	}
+	retrieveData, err := parseRetrieveFlag()
+	if err != nil {
+		return err
+	}
 
 	apiEndpoint := fmt.Sprintf("https://%s/v1", *server)
 
@@ -47,27 +55,85 @@ func run() error {
 		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	log.Print("✨ Fetching secret from DSV...")
-
-	secret, err := dsvGetSecret(httpClient, apiEndpoint, token, *secretPath)
-	if err != nil {
-		return fmt.Errorf("failed to fetch secret from DSV: %v", err)
+	log.Print("✨ Fetching secret(s) from DSV...")
+	for secretPath, secretDataOutput := range retrieveData {
+		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, secretPath)
+		if err != nil {
+			return fmt.Errorf("failed to fetch secret from DSV: %v", err)
+		}
+		secretData, dataExists := secret["data"].(map[string]interface{})
+		if !dataExists {
+			return fmt.Errorf("cannot get secret data from '%s' secret", secretPath)
+		}
+		for secretDataKey, outputKey := range secretDataOutput {
+			secretValue, valExists := secretData[secretDataKey].(string)
+			if !valExists {
+				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, secretPath)
+			}
+			actionSetOutput(outputKey, secretValue)
+			if *setEnv {
+				actionExportVariable(outputKey, secretValue)
+			}
+		}
 	}
-
-	secretData, dataExists := secret["data"].(map[string]interface{})
-	if !dataExists {
-		return fmt.Errorf("cannot get secret data from '%s' secret", *secretPath)
-	}
-
-	secretValue, valExists := secretData[*secretDataKey].(string)
-	if !valExists {
-		return fmt.Errorf("cannot get '%s' from '%s' secret data", *secretDataKey, *secretPath)
-	}
-
-	actionSetOutput("secretVal", secretValue)
-	actionExportVariable("secretEnvVal", secretValue)
-
 	return nil
+}
+
+func validateInput() error {
+	if *server == "" {
+		return fmt.Errorf("server must be specified")
+	}
+	serverPathTokens := strings.Split(*server, ".")
+	for _, token := range serverPathTokens {
+		if token == "" || len(serverPathTokens) < 3 {
+			return fmt.Errorf("bad server input: '%s'", *server)
+		}
+	}
+	if *clientId == "" {
+		return fmt.Errorf("clientId must be specified")
+	}
+	if *clientSecret == "" {
+		return fmt.Errorf("clientSecret must be specified")
+	}
+	if *retrieve == "" {
+		return fmt.Errorf("retrieve must be specified")
+	}
+	return nil
+}
+
+func parseRetrieveFlag() (map[string]map[string]string, error) {
+	*retrieve = strings.TrimPrefix(*retrieve, "|")
+	result := make(map[string]map[string]string)
+	for _, row := range strings.Split(*retrieve, "\n") {
+		tokens := make([]string, 0, 4)
+		for _, token := range strings.Split(row, " ") {
+			if token != "" {
+				tokens = append(tokens, token)
+			}
+		}
+		if len(tokens) == 0 {
+			continue
+		} else if len(tokens) != 4 {
+			return nil, fmt.Errorf("failed to parse '%s'. "+
+				"each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces", row)
+		}
+
+		var (
+			secretPath    = tokens[0]
+			secretDataKey = tokens[1]
+			outputKey     = tokens[3]
+		)
+		if !regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`).MatchString(secretPath) {
+			return nil, fmt.Errorf("failed to parse secret path '%s': "+
+				"secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash",
+				secretPath)
+		}
+		if _, exists := result[secretPath]; !exists {
+			result[secretPath] = make(map[string]string)
+		}
+		result[secretPath][secretDataKey] = outputKey
+	}
+	return result, nil
 }
 
 func dsvGetToken(c *http.Client, apiEndpoint, cid, csecret string) (string, error) {
