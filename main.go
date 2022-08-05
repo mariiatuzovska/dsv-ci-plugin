@@ -102,7 +102,6 @@ func validateInput() error {
 }
 
 func parseRetrieveFlag() (map[string]map[string]string, error) {
-	*retrieve = strings.TrimPrefix(*retrieve, "|")
 	result := make(map[string]map[string]string)
 	for _, row := range strings.Split(*retrieve, "\n") {
 		tokens := make([]string, 0, 4)
