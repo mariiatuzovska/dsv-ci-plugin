@@ -8,15 +8,10 @@ inputs:
     required: true
   clientSecret:
     required: true
-  secretPath:
+  setEnv:
     required: true
-  secretDataKey:
+  retrieve:
     required: true
-
-outputs:
-  secretVal:
-    description: 'Value from secret data for a given secretDataKey'
-
 
 runs:
   using: docker
@@ -25,5 +20,5 @@ runs:
     - --server=${{ inputs.server }}
     - --clientId=${{ inputs.clientId }}
     - --clientSecret=${{ inputs.clientSecret }}
-    - --secretPath=${{ inputs.secretPath }}
-    - --secretDataKey=${{ inputs.secretDataKey }}
+    - --setEnv=${{ inputs.setEnv }}
+    - --retrieve=${{ inputs.retrieve }}
