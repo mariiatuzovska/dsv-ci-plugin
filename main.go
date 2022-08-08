@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -19,43 +18,53 @@ const (
 	DefaultTimeout = time.Second * 5
 )
 
-var (
-	server       = flag.String("server", "", "Secret server")
-	clientId     = flag.String("clientId", "", "Client ID")
-	clientSecret = flag.String("clientSecret", "", "Client Secret")
-	setEnv       = flag.Bool("setEnv", false, "Specifies to set or do not set environment")
-	retrieve     = flag.String("retrieve", "", "Secret paths and data keys")
-)
-
 func main() {
+	var (
+		server       = flag.String("server", "", "Secret server")
+		clientId     = flag.String("clientId", "", "Client ID")
+		clientSecret = flag.String("clientSecret", "", "Client Secret")
+		setEnv       = flag.Bool("setEnv", false, "Specifies to set or do not set environment")
+		retrieve     = flag.String("retrieve", "", "Secret paths and data keys")
+	)
 	flag.Parse()
-	if err := run(); err != nil {
+	if *server == "" {
+		actionStringError("server must be specified")
+		os.Exit(1)
+	}
+	if *clientId == "" {
+		actionStringError("clientId must be specified")
+		os.Exit(1)
+	}
+	if *clientSecret == "" {
+		actionStringError("clientSecret must be specified")
+		os.Exit(1)
+	}
+	if *retrieve == "" {
+		actionStringError("retrieve string must be specified")
+		os.Exit(1)
+	}
+	retrieveData, err := parseRetrieveFlag(*retrieve)
+	if err != nil {
+		actionError(err)
+		os.Exit(1)
+	}
+	if err := run(*server, *clientId, *clientSecret, *setEnv, retrieveData); err != nil {
 		actionError(err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	if err := validateInput(); err != nil {
-		return err
-	}
-	retrieveData, err := parseRetrieveFlag()
-	if err != nil {
-		return err
-	}
-
-	apiEndpoint := fmt.Sprintf("https://%s/v1", *server)
-
+func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[string]map[string]string) error {
+	apiEndpoint := fmt.Sprintf("https://%s/v1", server)
 	httpClient := &http.Client{Timeout: DefaultTimeout}
 
-	log.Print("🔑 Fetching access token...")
-
-	token, err := dsvGetToken(httpClient, apiEndpoint, *clientId, *clientSecret)
+	actionInfo("🔑 Fetching access token...")
+	token, err := dsvGetToken(httpClient, apiEndpoint, clientId, clientSecret)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	log.Print("✨ Fetching secret(s) from DSV...")
+	actionInfo("✨ Fetching secret(s) from DSV...")
 	for secretPath, secretDataOutput := range retrieveData {
 		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, secretPath)
 		if err != nil {
@@ -71,7 +80,7 @@ func run() error {
 				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, secretPath)
 			}
 			actionSetOutput(outputKey, secretValue)
-			if *setEnv {
+			if setEnv {
 				actionExportVariable(outputKey, secretValue)
 			}
 		}
@@ -79,31 +88,10 @@ func run() error {
 	return nil
 }
 
-func validateInput() error {
-	if *server == "" {
-		return fmt.Errorf("server must be specified")
-	}
-	serverPathTokens := strings.Split(*server, ".")
-	for _, token := range serverPathTokens {
-		if token == "" || len(serverPathTokens) < 3 {
-			return fmt.Errorf("bad server input: '%s'", *server)
-		}
-	}
-	if *clientId == "" {
-		return fmt.Errorf("clientId must be specified")
-	}
-	if *clientSecret == "" {
-		return fmt.Errorf("clientSecret must be specified")
-	}
-	if *retrieve == "" {
-		return fmt.Errorf("retrieve must be specified")
-	}
-	return nil
-}
-
-func parseRetrieveFlag() (map[string]map[string]string, error) {
+func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
-	for _, row := range strings.Split(*retrieve, "\n") {
+	mastCompile := regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`)
+	for _, row := range strings.Split(retrieve, "\n") {
 		tokens := make([]string, 0, 4)
 		for _, token := range strings.Split(row, " ") {
 			if token != "" {
@@ -122,7 +110,7 @@ func parseRetrieveFlag() (map[string]map[string]string, error) {
 			secretDataKey = tokens[1]
 			outputKey     = tokens[3]
 		)
-		if !regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`).MatchString(secretPath) {
+		if !mastCompile.MatchString(secretPath) {
 			return nil, fmt.Errorf("failed to parse secret path '%s': "+
 				"secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash",
 				secretPath)
@@ -138,7 +126,7 @@ func parseRetrieveFlag() (map[string]map[string]string, error) {
 func dsvGetToken(c *http.Client, apiEndpoint, cid, csecret string) (string, error) {
 	body := []byte(fmt.Sprintf(
 		`{"grant_type":"client_credentials","client_id":"%s","client_secret":"%s"}`,
-		*clientId, *clientSecret,
+		cid, csecret,
 	))
 	endpoint := apiEndpoint + "/token"
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
@@ -171,6 +159,7 @@ func dsvGetToken(c *http.Client, apiEndpoint, cid, csecret string) (string, erro
 	if !strExists {
 		return "", fmt.Errorf("could not read access token from response")
 	}
+	actionDebugf("POST %s: token has been read", endpoint)
 	return token, nil
 }
 
@@ -202,7 +191,20 @@ func dsvGetSecret(c *http.Client, apiEndpoint, accessToken, secretPath string) (
 	if err != nil {
 		return nil, fmt.Errorf("could not unmarshal response body: %v", err)
 	}
+	actionDebugf("GET %s: secret has been read", endpoint)
 	return secret, nil
+}
+
+func actionDebug(s string) {
+	fmt.Printf("::debug::%s\n", s)
+}
+
+func actionDebugf(format string, args ...interface{}) {
+	actionDebug(fmt.Sprintf(format, args...))
+}
+
+func actionInfo(s string) {
+	fmt.Println(s)
 }
 
 func actionError(err error) {
@@ -215,6 +217,7 @@ func actionStringError(s string) {
 
 func actionSetOutput(key, val string) {
 	fmt.Printf("::set-output name=%s::%s\n", key, val)
+	actionDebugf("output key %s has been set", key)
 }
 
 func actionExportVariable(key, val string) {
@@ -235,4 +238,5 @@ func actionExportVariable(key, val string) {
 		actionError(fmt.Errorf("could not update GITHUB_ENV environment file: %v", err))
 		return
 	}
+	actionDebugf("environment variable %s has been set", key)
 }
