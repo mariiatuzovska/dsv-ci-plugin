@@ -18,6 +18,10 @@ const (
 	DefaultTimeout = time.Second * 5
 )
 
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 func main() {
 	var (
 		server       = flag.String("server", "", "Secret server")
@@ -90,7 +94,8 @@ func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[st
 
 func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
-	mastCompile := regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`)
+	retrieve = strings.ReplaceAll(retrieve, "\t", " ")
+	mustCompile := regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`)
 	for _, row := range strings.Split(retrieve, "\n") {
 		tokens := make([]string, 0, 4)
 		for _, token := range strings.Split(row, " ") {
@@ -110,7 +115,7 @@ func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
 			secretDataKey = tokens[1]
 			outputKey     = tokens[3]
 		)
-		if !mastCompile.MatchString(secretPath) {
+		if !mustCompile.MatchString(secretPath) {
 			return nil, fmt.Errorf("failed to parse secret path '%s': "+
 				"secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash",
 				secretPath)
@@ -123,7 +128,7 @@ func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
 	return result, nil
 }
 
-func dsvGetToken(c *http.Client, apiEndpoint, cid, csecret string) (string, error) {
+func dsvGetToken(c HttpClient, apiEndpoint, cid, csecret string) (string, error) {
 	body := []byte(fmt.Sprintf(
 		`{"grant_type":"client_credentials","client_id":"%s","client_secret":"%s"}`,
 		cid, csecret,
@@ -163,7 +168,7 @@ func dsvGetToken(c *http.Client, apiEndpoint, cid, csecret string) (string, erro
 	return token, nil
 }
 
-func dsvGetSecret(c *http.Client, apiEndpoint, accessToken, secretPath string) (map[string]interface{}, error) {
+func dsvGetSecret(c HttpClient, apiEndpoint, accessToken, secretPath string) (map[string]interface{}, error) {
 	endpoint := apiEndpoint + "/secrets/" + secretPath
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
