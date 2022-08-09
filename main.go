@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	// DefaultTimeout defines default timeout for HTTP requests.
-	DefaultTimeout = time.Second * 5
+	// defaultTimeout defines default timeout for HTTP requests.
+	defaultTimeout = time.Second * 5
 )
 
 type HttpClient interface {
@@ -60,7 +60,7 @@ func main() {
 
 func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[string]map[string]string) error {
 	apiEndpoint := fmt.Sprintf("https://%s/v1", server)
-	httpClient := &http.Client{Timeout: DefaultTimeout}
+	httpClient := &http.Client{Timeout: defaultTimeout}
 
 	actionInfo("🔑 Fetching access token...")
 	token, err := dsvGetToken(httpClient, apiEndpoint, clientId, clientSecret)
