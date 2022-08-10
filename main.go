@@ -13,26 +13,20 @@ import (
 	"time"
 )
 
-const (
-	// defaultTimeout defines default timeout for HTTP requests.
-	defaultTimeout = time.Second * 5
-)
-
-type HttpClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
+// defaultTimeout defines default timeout for HTTP requests.
+const defaultTimeout = time.Second * 5
 
 func main() {
 	var (
-		server       = flag.String("server", "", "Secret server")
-		clientId     = flag.String("clientId", "", "Client ID")
-		clientSecret = flag.String("clientSecret", "", "Client Secret")
-		setEnv       = flag.Bool("setEnv", false, "Specifies to set or do not set environment")
-		retrieve     = flag.String("retrieve", "", "Secret paths and data keys")
+		domain       = flag.String("domain", "", "Tenant domain name (e.g. example.secretsvaultcloud.com).")
+		clientId     = flag.String("clientId", "", "Client ID for authentication.")
+		clientSecret = flag.String("clientSecret", "", "Client Secret for authentication.")
+		setEnv       = flag.Bool("setEnv", false, "Set environment variables. Required GITHUB_ENV environment variable to be a valid path to a file.")
+		retrieve     = flag.String("retrieve", "", "Data to retrieve from DSV in format `<path> <data key> as <output key>`")
 	)
 	flag.Parse()
-	if *server == "" {
-		actionStringError("server must be specified")
+	if *domain == "" {
+		actionStringError("domain must be specified")
 		os.Exit(1)
 	}
 	if *clientId == "" {
@@ -52,14 +46,14 @@ func main() {
 		actionError(err)
 		os.Exit(1)
 	}
-	if err := run(*server, *clientId, *clientSecret, *setEnv, retrieveData); err != nil {
+	if err := run(*domain, *clientId, *clientSecret, *setEnv, retrieveData); err != nil {
 		actionError(err)
 		os.Exit(1)
 	}
 }
 
-func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[string]map[string]string) error {
-	apiEndpoint := fmt.Sprintf("https://%s/v1", server)
+func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[string]map[string]string) error {
+	apiEndpoint := fmt.Sprintf("https://%s/v1", domain)
 	httpClient := &http.Client{Timeout: defaultTimeout}
 
 	actionInfo("🔑 Fetching access token...")
@@ -69,19 +63,20 @@ func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	}
 
 	actionInfo("✨ Fetching secret(s) from DSV...")
-	for secretPath, secretDataOutput := range retrieveData {
-		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, secretPath)
+	for path, dataMap := range retrieveData {
+		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, path)
 		if err != nil {
 			return fmt.Errorf("failed to fetch secret from DSV: %v", err)
 		}
-		secretData, dataExists := secret["data"].(map[string]interface{})
-		if !dataExists {
-			return fmt.Errorf("cannot get secret data from '%s' secret", secretPath)
+		secretData, ok := secret["data"].(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("cannot get secret data from '%s' secret", path)
 		}
-		for secretDataKey, outputKey := range secretDataOutput {
-			secretValue, valExists := secretData[secretDataKey].(string)
-			if !valExists {
-				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, secretPath)
+
+		for secretDataKey, outputKey := range dataMap {
+			secretValue, ok := secretData[secretDataKey].(string)
+			if !ok {
+				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, path)
 			}
 			actionSetOutput(outputKey, secretValue)
 			if setEnv {
@@ -93,42 +88,50 @@ func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[st
 }
 
 func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
+	pathRegexp := regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`)
+	whitespaces := regexp.MustCompile(`\s+`)
+
 	result := make(map[string]map[string]string)
-	retrieve = strings.ReplaceAll(retrieve, "\t", " ")
-	mustCompile := regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`)
+
 	for _, row := range strings.Split(retrieve, "\n") {
-		tokens := make([]string, 0, 4)
-		for _, token := range strings.Split(row, " ") {
-			if token != "" {
-				tokens = append(tokens, token)
-			}
-		}
-		if len(tokens) == 0 {
+		row = strings.TrimSpace(row)
+		if row == "" {
 			continue
-		} else if len(tokens) != 4 {
+		}
+		row = whitespaces.ReplaceAllString(row, " ")
+
+		tokens := strings.Split(row, " ")
+
+		if len(tokens) != 4 {
 			return nil, fmt.Errorf("failed to parse '%s'. "+
-				"each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces", row)
+				"each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces and/or tabs", row)
 		}
 
 		var (
-			secretPath    = tokens[0]
-			secretDataKey = tokens[1]
-			outputKey     = tokens[3]
+			path      = tokens[0]
+			dataKey   = tokens[1]
+			outputKey = tokens[3]
 		)
-		if !mustCompile.MatchString(secretPath) {
+		if !pathRegexp.MatchString(path) {
 			return nil, fmt.Errorf("failed to parse secret path '%s': "+
 				"secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash",
-				secretPath)
+				path)
 		}
-		if _, exists := result[secretPath]; !exists {
-			result[secretPath] = make(map[string]string)
+
+		if _, ok := result[path]; !ok {
+			result[path] = make(map[string]string)
 		}
-		result[secretPath][secretDataKey] = outputKey
+		result[path][dataKey] = outputKey
 	}
+
 	return result, nil
 }
 
-func dsvGetToken(c HttpClient, apiEndpoint, cid, csecret string) (string, error) {
+type httpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+func dsvGetToken(c httpClient, apiEndpoint, cid, csecret string) (string, error) {
 	body := []byte(fmt.Sprintf(
 		`{"grant_type":"client_credentials","client_id":"%s","client_secret":"%s"}`,
 		cid, csecret,
@@ -168,7 +171,7 @@ func dsvGetToken(c HttpClient, apiEndpoint, cid, csecret string) (string, error)
 	return token, nil
 }
 
-func dsvGetSecret(c HttpClient, apiEndpoint, accessToken, secretPath string) (map[string]interface{}, error) {
+func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (map[string]interface{}, error) {
 	endpoint := apiEndpoint + "/secrets/" + secretPath
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
