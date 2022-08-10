@@ -22,7 +22,7 @@ func main() {
 		clientId     = flag.String("clientId", "", "Client ID for authentication.")
 		clientSecret = flag.String("clientSecret", "", "Client Secret for authentication.")
 		setEnv       = flag.Bool("setEnv", false, "Set environment variables. Required GITHUB_ENV environment variable to be a valid path to a file.")
-		retrieve     = flag.String("retrieve", "", "Data to retrieve from DSV in format `<path> <data key> as <output key>`")
+		retrieve     = flag.String("retrieve", "", "Data to retrieve from DSV in format `<path> <data key> as <output key>`.")
 	)
 	flag.Parse()
 	if *domain == "" {

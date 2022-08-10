@@ -2,6 +2,17 @@
 
 Delinea DevOps Secrets Vault (DSV) GitHub Action allows you to access and reference your Secrets data available for use in GitHub Actions.
 
+## Inputs
+
+| Name           | Description |
+| ---------------| ------------|
+| `domain`       | Tenant domain name (e.g. example.secretsvaultcloud.com). |
+| `clientId`     | Client ID for authentication. |
+| `clientSecret` | Client Secret for authentication. |
+| `setEnv`       | Set environment variables. |
+| `retrieve`     | Data to retrieve from DSV in format `<path> <data key> as <output key>`. |
+
+
 ## Usage
 
 ```
