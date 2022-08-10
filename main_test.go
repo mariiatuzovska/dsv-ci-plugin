@@ -62,13 +62,13 @@ func TestParseRetrieveFlag(t *testing.T) {
 			name:     "too many args",
 			retrieve: `arg1 arg2 as arg3 arg4`,
 			want:     nil,
-			wantErr:  fmt.Errorf("failed to parse 'arg1 arg2 as arg3 arg4'. each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces"),
+			wantErr:  fmt.Errorf("failed to parse 'arg1 arg2 as arg3 arg4'. each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces and/or tabs"),
 		},
 		{
 			name:     "less args",
 			retrieve: `arg1 arg2`,
 			want:     nil,
-			wantErr:  fmt.Errorf("failed to parse 'arg1 arg2'. each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces"),
+			wantErr:  fmt.Errorf("failed to parse 'arg1 arg2'. each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces and/or tabs"),
 		},
 	}
 	for _, tc := range cases {
@@ -90,7 +90,7 @@ func TestDsvGetToken(t *testing.T) {
 		apiEndpoint string
 		cid         string
 		csecret     string
-		httpClient  HttpClient
+		client      httpClient
 		want        string
 		wantErr     error
 	}{
@@ -99,7 +99,7 @@ func TestDsvGetToken(t *testing.T) {
 			apiEndpoint: "test.example.com",
 			cid:         "client_id",
 			csecret:     "client_secret",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "200 OK",
 					StatusCode: 200,
@@ -117,7 +117,7 @@ func TestDsvGetToken(t *testing.T) {
 			apiEndpoint: "test.example.com",
 			cid:         "client_id",
 			csecret:     "client_secret",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "400 Bad Request",
 					StatusCode: 400,
@@ -133,7 +133,7 @@ func TestDsvGetToken(t *testing.T) {
 			apiEndpoint: "",
 			cid:         "client_id",
 			csecret:     "client_secret",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "400 Bad Request",
 					StatusCode: 400,
@@ -149,7 +149,7 @@ func TestDsvGetToken(t *testing.T) {
 			apiEndpoint: "test.example.com",
 			cid:         "client_id",
 			csecret:     "client_secret",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: nil,
 				err:      fmt.Errorf("error"),
 			},
@@ -161,7 +161,7 @@ func TestDsvGetToken(t *testing.T) {
 			apiEndpoint: "test.example.com",
 			cid:         "client_id",
 			csecret:     "client_secret",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "200 OK",
 					StatusCode: 200,
@@ -177,7 +177,7 @@ func TestDsvGetToken(t *testing.T) {
 			apiEndpoint: "test.example.com",
 			cid:         "client_id",
 			csecret:     "client_secret",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "200 OK",
 					StatusCode: 200,
@@ -193,7 +193,7 @@ func TestDsvGetToken(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := dsvGetToken(tc.httpClient, tc.apiEndpoint, tc.cid, tc.csecret)
+			result, err := dsvGetToken(tc.client, tc.apiEndpoint, tc.cid, tc.csecret)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
 				t.Errorf("want error %v, got %v", tc.wantErr, err)
 			}
@@ -207,7 +207,7 @@ func TestDsvGetToken(t *testing.T) {
 func TestDsvGetSecret(t *testing.T) {
 	cases := []struct {
 		name        string
-		httpClient  HttpClient
+		client      httpClient
 		apiEndpoint string
 		accessToken string
 		secretPath  string
@@ -216,7 +216,7 @@ func TestDsvGetSecret(t *testing.T) {
 	}{
 		{
 			name: "happy path",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "200 OK",
 					StatusCode: 200,
@@ -236,7 +236,7 @@ func TestDsvGetSecret(t *testing.T) {
 		},
 		{
 			name: "bad request",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "400 Bad Request",
 					StatusCode: 400,
@@ -252,7 +252,7 @@ func TestDsvGetSecret(t *testing.T) {
 		},
 		{
 			name: "http error",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: nil,
 				err:      fmt.Errorf("error"),
 			},
@@ -264,7 +264,7 @@ func TestDsvGetSecret(t *testing.T) {
 		},
 		{
 			name: "nil body",
-			httpClient: &MockHttpClient{
+			client: &MockHttpClient{
 				response: &http.Response{
 					Status:     "200 OK",
 					StatusCode: 200,
@@ -281,7 +281,7 @@ func TestDsvGetSecret(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := dsvGetSecret(tc.httpClient, tc.apiEndpoint, tc.accessToken, tc.secretPath)
+			result, err := dsvGetSecret(tc.client, tc.apiEndpoint, tc.accessToken, tc.secretPath)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
 				t.Errorf("want error %v, got %v", tc.wantErr, err)
 			}
