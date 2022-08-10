@@ -6,4 +6,5 @@ RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /bin/app main.go
 FROM scratch
 COPY --from=builder /bin/app /bin/app
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-# ENTRYPOINT [""]
+# ENTRYPOINT ["app"]
+EXPOSE 8080
