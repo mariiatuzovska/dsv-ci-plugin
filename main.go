@@ -27,48 +27,45 @@ func main() {
 		server       = flag.String("server", "", "Secret server")
 		clientId     = flag.String("clientId", "", "Client ID")
 		clientSecret = flag.String("clientSecret", "", "Client Secret")
-		setEnv       = flag.Bool("setEnv", false, "Specifies to set or do not set environment")
 		retrieve     = flag.String("retrieve", "", "Secret paths and data keys")
 	)
 	flag.Parse()
 	if *server == "" {
-		actionStringError("server must be specified")
+		fmt.Println("server must be specified")
 		os.Exit(1)
 	}
 	if *clientId == "" {
-		actionStringError("clientId must be specified")
+		fmt.Println("clientId must be specified")
 		os.Exit(1)
 	}
 	if *clientSecret == "" {
-		actionStringError("clientSecret must be specified")
+		fmt.Println("clientSecret must be specified")
 		os.Exit(1)
 	}
 	if *retrieve == "" {
-		actionStringError("retrieve string must be specified")
+		fmt.Println("retrieve string must be specified")
 		os.Exit(1)
 	}
 	retrieveData, err := parseRetrieveFlag(*retrieve)
 	if err != nil {
-		actionError(err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
-	if err := run(*server, *clientId, *clientSecret, *setEnv, retrieveData); err != nil {
-		actionError(err)
+	if err := run(*server, *clientId, *clientSecret, retrieveData); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
-func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[string]map[string]string) error {
+func run(server, clientId, clientSecret string, retrieveData map[string]map[string]string) error {
 	apiEndpoint := fmt.Sprintf("https://%s/v1", server)
 	httpClient := &http.Client{Timeout: DefaultTimeout}
 
-	actionInfo("🔑 Fetching access token...")
 	token, err := dsvGetToken(httpClient, apiEndpoint, clientId, clientSecret)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	actionInfo("✨ Fetching secret(s) from DSV...")
 	for secretPath, secretDataOutput := range retrieveData {
 		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, secretPath)
 		if err != nil {
@@ -83,10 +80,7 @@ func run(server, clientId, clientSecret string, setEnv bool, retrieveData map[st
 			if !valExists {
 				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, secretPath)
 			}
-			actionSetOutput(outputKey, secretValue)
-			if setEnv {
-				actionExportVariable(outputKey, secretValue)
-			}
+			actionExportVariable(outputKey, secretValue)
 		}
 	}
 	return nil
@@ -164,7 +158,6 @@ func dsvGetToken(c HttpClient, apiEndpoint, cid, csecret string) (string, error)
 	if !strExists {
 		return "", fmt.Errorf("could not read access token from response")
 	}
-	actionDebugf("POST %s: token has been read", endpoint)
 	return token, nil
 }
 
@@ -196,52 +189,9 @@ func dsvGetSecret(c HttpClient, apiEndpoint, accessToken, secretPath string) (ma
 	if err != nil {
 		return nil, fmt.Errorf("could not unmarshal response body: %v", err)
 	}
-	actionDebugf("GET %s: secret has been read", endpoint)
 	return secret, nil
 }
 
-func actionDebug(s string) {
-	fmt.Printf("::debug::%s\n", s)
-}
-
-func actionDebugf(format string, args ...interface{}) {
-	actionDebug(fmt.Sprintf(format, args...))
-}
-
-func actionInfo(s string) {
-	fmt.Println(s)
-}
-
-func actionError(err error) {
-	fmt.Printf("::error::%v\n", err)
-}
-
-func actionStringError(s string) {
-	fmt.Printf("::error::%s\n", s)
-}
-
-func actionSetOutput(key, val string) {
-	fmt.Printf("::set-output name=%s::%s\n", key, val)
-	actionDebugf("output key %s has been set", key)
-}
-
 func actionExportVariable(key, val string) {
-	envFile := os.Getenv("GITHUB_ENV")
-	if envFile == "" {
-		actionStringError("GITHUB_ENV environment file is not defined")
-		return
-	}
-
-	f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		actionError(fmt.Errorf("could not open GITHUB_ENV environment file: %v", err))
-		return
-	}
-	defer f.Close()
-
-	if _, err = f.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
-		actionError(fmt.Errorf("could not update GITHUB_ENV environment file: %v", err))
-		return
-	}
-	actionDebugf("environment variable %s has been set", key)
+	fmt.Printf("export %s=%s\n", strings.ToUpper(key), val)
 }
