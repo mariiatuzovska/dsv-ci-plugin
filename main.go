@@ -31,20 +31,32 @@ func main() {
 	)
 	flag.Parse()
 	if *server == "" {
-		fmt.Println("server must be specified")
-		os.Exit(1)
+		*server = os.Getenv("SERVER")
+		if *server == "" {
+			fmt.Println("server must be specified")
+			os.Exit(1)
+		}
 	}
 	if *clientId == "" {
-		fmt.Println("clientId must be specified")
-		os.Exit(1)
+		*clientId = os.Getenv("CLIENT_ID")
+		if *clientId == "" {
+			fmt.Println("clientId must be specified")
+			os.Exit(1)
+		}
 	}
 	if *clientSecret == "" {
-		fmt.Println("clientSecret must be specified")
-		os.Exit(1)
+		*clientSecret = os.Getenv("CLIENT_SECRET")
+		if *clientSecret == "" {
+			fmt.Println("clientSecret must be specified")
+			os.Exit(1)
+		}
 	}
 	if *retrieve == "" {
-		fmt.Println("retrieve string must be specified")
-		os.Exit(1)
+		*retrieve = os.Getenv("RETRIEVE")
+		if *retrieve == "" {
+			fmt.Println("retrieve string must be specified")
+			os.Exit(1)
+		}
 	}
 	retrieveData, err := parseRetrieveFlag(*retrieve)
 	if err != nil {
