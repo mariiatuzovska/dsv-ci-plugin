@@ -64,6 +64,8 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 
 	actionInfo("✨ Fetching secret(s) from DSV...")
 	for path, dataMap := range retrieveData {
+		actionDebugf("Fetching secret at path %q", path)
+
 		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, path)
 		if err != nil {
 			return fmt.Errorf("failed to fetch secret from DSV: %v", err)
@@ -78,9 +80,12 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 			if !ok {
 				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, path)
 			}
+
 			actionSetOutput(outputKey, secretValue)
+			actionDebugf("Output key %s has been set", outputKey)
 			if setEnv {
 				actionExportVariable(outputKey, secretValue)
+				actionDebugf("Environment variable %s has been set", outputKey)
 			}
 		}
 	}
@@ -167,7 +172,6 @@ func dsvGetToken(c httpClient, apiEndpoint, cid, csecret string) (string, error)
 	if !strExists {
 		return "", fmt.Errorf("could not read access token from response")
 	}
-	actionDebugf("POST %s: token has been read", endpoint)
 	return token, nil
 }
 
@@ -199,7 +203,6 @@ func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (ma
 	if err != nil {
 		return nil, fmt.Errorf("could not unmarshal response body: %v", err)
 	}
-	actionDebugf("GET %s: secret has been read", endpoint)
 	return secret, nil
 }
 
@@ -225,7 +228,6 @@ func actionStringError(s string) {
 
 func actionSetOutput(key, val string) {
 	fmt.Printf("::set-output name=%s::%s\n", key, val)
-	actionDebugf("output key %s has been set", key)
 }
 
 func actionExportVariable(key, val string) {
@@ -246,5 +248,4 @@ func actionExportVariable(key, val string) {
 		actionError(fmt.Errorf("could not update GITHUB_ENV environment file: %v", err))
 		return
 	}
-	actionDebugf("environment variable %s has been set", key)
 }
