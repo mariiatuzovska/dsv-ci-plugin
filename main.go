@@ -51,8 +51,6 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	forever := make(chan bool)
-	<-forever
 }
 
 func run(server, clientId, clientSecret string, retrieveData map[string]map[string]string) error {
