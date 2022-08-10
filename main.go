@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,50 +22,37 @@ type HttpClient interface {
 }
 
 func main() {
-	var (
-		server       = flag.String("server", "", "Secret server")
-		clientId     = flag.String("clientId", "", "Client ID")
-		clientSecret = flag.String("clientSecret", "", "Client Secret")
-		retrieve     = flag.String("retrieve", "", "Secret paths and data keys")
-	)
-	flag.Parse()
-	if *server == "" {
-		*server = os.Getenv("SERVER")
-		if *server == "" {
-			fmt.Println("server must be specified")
-			os.Exit(1)
-		}
+	server := os.Getenv("SERVER")
+	if server == "" {
+		fmt.Println("server must be specified")
+		os.Exit(1)
 	}
-	if *clientId == "" {
-		*clientId = os.Getenv("CLIENT_ID")
-		if *clientId == "" {
-			fmt.Println("clientId must be specified")
-			os.Exit(1)
-		}
+	clientId := os.Getenv("CLIENT_ID")
+	if clientId == "" {
+		fmt.Println("clientId must be specified")
+		os.Exit(1)
 	}
-	if *clientSecret == "" {
-		*clientSecret = os.Getenv("CLIENT_SECRET")
-		if *clientSecret == "" {
-			fmt.Println("clientSecret must be specified")
-			os.Exit(1)
-		}
+	clientSecret := os.Getenv("CLIENT_SECRET")
+	if clientSecret == "" {
+		fmt.Println("clientSecret must be specified")
+		os.Exit(1)
 	}
-	if *retrieve == "" {
-		*retrieve = os.Getenv("RETRIEVE")
-		if *retrieve == "" {
-			fmt.Println("retrieve string must be specified")
-			os.Exit(1)
-		}
+	retrieve := os.Getenv("RETRIEVE")
+	if retrieve == "" {
+		fmt.Println("retrieve string must be specified")
+		os.Exit(1)
 	}
-	retrieveData, err := parseRetrieveFlag(*retrieve)
+	retrieveData, err := parseRetrieveFlag(retrieve)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	if err := run(*server, *clientId, *clientSecret, retrieveData); err != nil {
+	if err := run(server, clientId, clientSecret, retrieveData); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	forever := make(chan bool)
+	<-forever
 }
 
 func run(server, clientId, clientSecret string, retrieveData map[string]map[string]string) error {
@@ -92,7 +78,7 @@ func run(server, clientId, clientSecret string, retrieveData map[string]map[stri
 			if !valExists {
 				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, secretPath)
 			}
-			actionExportVariable(outputKey, secretValue)
+			os.Setenv(strings.ToUpper(outputKey), secretValue)
 		}
 	}
 	return nil
@@ -202,8 +188,4 @@ func dsvGetSecret(c HttpClient, apiEndpoint, accessToken, secretPath string) (ma
 		return nil, fmt.Errorf("could not unmarshal response body: %v", err)
 	}
 	return secret, nil
-}
-
-func actionExportVariable(key, val string) {
-	fmt.Printf("export %s=%s\n", strings.ToUpper(key), val)
 }
