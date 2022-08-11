@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,37 +15,54 @@ import (
 // defaultTimeout defines default timeout for HTTP requests.
 const defaultTimeout = time.Second * 5
 
+var githubCI, gitlabCI bool = false, false
+
 func main() {
-	var (
-		domain       = flag.String("domain", "", "Tenant domain name (e.g. example.secretsvaultcloud.com).")
-		clientId     = flag.String("clientId", "", "Client ID for authentication.")
-		clientSecret = flag.String("clientSecret", "", "Client Secret for authentication.")
-		setEnv       = flag.Bool("setEnv", false, "Set environment variables. Required GITHUB_ENV environment variable to be a valid path to a file.")
-		retrieve     = flag.String("retrieve", "", "Data to retrieve from DSV in format `<path> <data key> as <output key>`.")
-	)
-	flag.Parse()
-	if *domain == "" {
+	switch {
+	case os.Getenv("GITHUB_ACTION") != "":
+		githubCI = true
+	case os.Getenv("GITLAB_CI") != "":
+		gitlabCI = true
+	default:
+		actionStringError("unknown CI server name")
+		os.Exit(1)
+	}
+
+	// Tenant domain name (e.g. example.secretsvaultcloud.com).
+	domain := os.Getenv("DOMAIN")
+	if domain == "" {
 		actionStringError("domain must be specified")
 		os.Exit(1)
 	}
-	if *clientId == "" {
+	// Client ID for authentication.
+	clientId := os.Getenv("CLIENT_ID")
+	if clientId == "" {
 		actionStringError("clientId must be specified")
 		os.Exit(1)
 	}
-	if *clientSecret == "" {
+	// Client Secret for authentication.
+	clientSecret := os.Getenv("CLIENT_SECRET")
+	if clientSecret == "" {
 		actionStringError("clientSecret must be specified")
 		os.Exit(1)
 	}
-	if *retrieve == "" {
+	// Data to retrieve from DSV in format `<path> <data key> as <output key>`.
+	retrieve := os.Getenv("RETRIEVE")
+	if retrieve == "" {
 		actionStringError("retrieve string must be specified")
 		os.Exit(1)
 	}
-	retrieveData, err := parseRetrieveFlag(*retrieve)
+	// Set environment variables in GITHUB. Required GITHUB_ENV environment variable to be a valid path to a file.
+	setEnv := false
+	if (githubCI && os.Getenv("SET_ENV") != "") || gitlabCI {
+		setEnv = true
+	}
+	retrieveData, err := parseRetrieveFlag(retrieve)
 	if err != nil {
 		actionError(err)
 		os.Exit(1)
 	}
-	if err := run(*domain, *clientId, *clientSecret, *setEnv, retrieveData); err != nil {
+	if err := run(domain, clientId, clientSecret, setEnv, retrieveData); err != nil {
 		actionError(err)
 		os.Exit(1)
 	}
@@ -207,7 +223,9 @@ func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (ma
 }
 
 func actionDebug(s string) {
-	fmt.Printf("::debug::%s\n", s)
+	if githubCI {
+		fmt.Printf("::debug::%s\n", s)
+	}
 }
 
 func actionDebugf(format string, args ...interface{}) {
@@ -219,33 +237,63 @@ func actionInfo(s string) {
 }
 
 func actionError(err error) {
-	fmt.Printf("::error::%v\n", err)
+	if githubCI {
+		fmt.Printf("::error::%v\n", err)
+	} else if gitlabCI {
+		fmt.Println(err)
+	}
 }
 
 func actionStringError(s string) {
-	fmt.Printf("::error::%s\n", s)
+	if githubCI {
+		fmt.Printf("::error::%s\n", s)
+	} else if gitlabCI {
+		fmt.Println(s)
+	}
 }
 
 func actionSetOutput(key, val string) {
-	fmt.Printf("::set-output name=%s::%s\n", key, val)
+	if githubCI {
+		fmt.Printf("::set-output name=%s::%s\n", key, val)
+	}
 }
 
 func actionExportVariable(key, val string) {
-	envFile := os.Getenv("GITHUB_ENV")
-	if envFile == "" {
-		actionStringError("GITHUB_ENV environment file is not defined")
-		return
-	}
+	if githubCI {
+		envFile := os.Getenv("GITHUB_ENV")
+		if envFile == "" {
+			actionStringError("GITHUB_ENV environment file is not defined")
+			return
+		}
 
-	f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		actionError(fmt.Errorf("could not open GITHUB_ENV environment file: %v", err))
-		return
-	}
-	defer f.Close()
+		f, err := os.OpenFile(envFile, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			actionError(fmt.Errorf("could not open GITHUB_ENV environment file: %v", err))
+			return
+		}
+		defer f.Close()
 
-	if _, err = f.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
-		actionError(fmt.Errorf("could not update GITHUB_ENV environment file: %v", err))
-		return
+		if _, err = f.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
+			actionError(fmt.Errorf("could not update GITHUB_ENV environment file: %v", err))
+			return
+		}
+	} else if gitlabCI {
+		envFile := os.Getenv("CI_JOB_NAME") + ".env"
+		if envFile == ".env" {
+			actionStringError("CI_JOB_NAME environment file is not defined")
+			return
+		}
+
+		f, err := os.OpenFile(envFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			actionError(fmt.Errorf("could not open %s environment file: %v", envFile, err))
+			return
+		}
+		defer f.Close()
+
+		if _, err = f.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
+			actionError(fmt.Errorf("could not update %s environment file: %v", envFile, err))
+			return
+		}
 	}
 }

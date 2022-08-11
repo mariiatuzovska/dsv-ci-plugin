@@ -16,9 +16,9 @@ inputs:
 runs:
   using: docker
   image: Dockerfile
-  args:
-    - --domain=${{ inputs.domain }}
-    - --clientId=${{ inputs.clientId }}
-    - --clientSecret=${{ inputs.clientSecret }}
-    - --setEnv=${{ inputs.setEnv }}
-    - --retrieve=${{ inputs.retrieve }}
+  env:
+    DOMAIN: ${{ inputs.domain }}
+    CLIENT_ID: ${{ inputs.clientId }}
+    CLIENT_SECRET: ${{ inputs.clientSecret }}
+    SET_ENV: ${{ inputs.setEnv }}
+    RETRIEVE: ${{ inputs.retrieve }}
