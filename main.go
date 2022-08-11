@@ -21,12 +21,12 @@ func main() {
 	switch {
 	case os.Getenv("GITHUB_ACTION") != "":
 		githubCI = true
-		actionInfo("🐣 starting to work with GITHUB")
+		actionInfo("🐣 Starting to work with GITHUB")
 	case os.Getenv("GITLAB_CI") != "":
 		gitlabCI = true
-		actionInfo("🐣 starting to work with GITLAB")
+		actionInfo("🐣 Starting to work with GITLAB")
 	default:
-		actionStringError("🤡 unknown CI server name")
+		actionStringError("🤡 Unknown CI server name")
 		os.Exit(1)
 	}
 
@@ -82,14 +82,15 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 
 	var envFile *os.File
 	if gitlabCI {
-		envFileName := os.Getenv("CI_JOB_NAME") + ".env"
-		if envFileName == ".env" {
-			return fmt.Errorf("CI_JOB_NAME environment string is not defined")
+		jobName := os.Getenv("CI_JOB_NAME")
+		if jobName == "" {
+			return fmt.Errorf("CI_JOB_NAME environment is not defined")
 		}
-		envFile, err = os.Create(envFileName)
+		envFile, err = os.OpenFile(jobName+".env", os.O_CREATE|os.O_RDWR, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("CI_JOB_NAME environment file cannot be created: %v", err)
+			return fmt.Errorf("cannot open file %s: %v", jobName+".env", err)
 		}
+		defer envFile.Close()
 	} else if githubCI && setEnv {
 		envFileName := os.Getenv("GITHUB_ENV")
 		if envFileName == "" {
@@ -97,8 +98,9 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 		}
 		envFile, err = os.OpenFile(envFileName, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			return fmt.Errorf("could not open GITHUB_ENV environment file: %v", err)
+			return fmt.Errorf("cannot open file %s: %v", envFileName, err)
 		}
+		defer envFile.Close()
 	}
 
 	actionInfo("✨ Fetching secret(s) from DSV...")
@@ -283,7 +285,7 @@ func actionSetOutput(key, val string) {
 
 func actionExportVariable(envFile *os.File, key, val string) {
 	if _, err := envFile.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
-		actionError(fmt.Errorf("could not update %s environment file: %v", envFile, err))
+		actionError(fmt.Errorf("could not update %s environment file: %v", envFile.Name(), err))
 		return
 	}
 }
