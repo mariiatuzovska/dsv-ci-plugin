@@ -83,14 +83,14 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	var envFile *os.File
 	if gitlabCI {
 		jobName := os.Getenv("CI_JOB_NAME")
+		actionInfo("opening file " + jobName + ".env")
 		if jobName == "" {
 			return fmt.Errorf("CI_JOB_NAME environment is not defined")
 		}
-		envFile, err = os.OpenFile(jobName+".env", os.O_CREATE|os.O_RDWR, os.ModePerm)
+		envFile, err = os.OpenFile(jobName+".env", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			return fmt.Errorf("cannot open file %s: %v", jobName+".env", err)
 		}
-		defer envFile.Close()
 	} else if githubCI && setEnv {
 		envFileName := os.Getenv("GITHUB_ENV")
 		if envFileName == "" {
@@ -100,10 +100,10 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 		if err != nil {
 			return fmt.Errorf("cannot open file %s: %v", envFileName, err)
 		}
-		defer envFile.Close()
 	}
 
 	actionInfo("✨ Fetching secret(s) from DSV...")
+	actionDebugf("retrieve: %#v\n", retrieveData)
 	for path, dataMap := range retrieveData {
 		actionDebugf("Fetching secret at path %q", path)
 
@@ -123,12 +123,25 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 			}
 
 			actionSetOutput(outputKey, secretValue)
-			actionDebugf("Output key %s has been set", outputKey)
 			if setEnv {
 				actionExportVariable(envFile, outputKey, secretValue)
-				actionDebugf("Environment variable %s has been set", outputKey)
 			}
 		}
+	}
+	if setEnv {
+		envFile.Close()
+		f, err := os.OpenFile(os.Getenv("CI_JOB_NAME")+".env", os.O_RDWR, 0600)
+		if err != nil {
+			actionError(err)
+			return nil
+		}
+		b := make([]byte, 100)
+		_, err = f.Read(b)
+		if err != nil {
+			actionError(err)
+			return nil
+		}
+		fmt.Println("file read:", string(b))
 	}
 	return nil
 }
@@ -248,9 +261,9 @@ func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (ma
 }
 
 func actionDebug(s string) {
-	if githubCI {
-		fmt.Printf("::debug::%s\n", s)
-	}
+	// if githubCI {
+	fmt.Printf("::debug::%s\n", s)
+	// }
 }
 
 func actionDebugf(format string, args ...interface{}) {
@@ -280,12 +293,13 @@ func actionStringError(s string) {
 func actionSetOutput(key, val string) {
 	if githubCI {
 		fmt.Printf("::set-output name=%s::%s\n", key, val)
+		actionDebugf("Output key %s has been set", key)
 	}
 }
 
 func actionExportVariable(envFile *os.File, key, val string) {
-	if _, err := envFile.WriteString(fmt.Sprintf("%s=%s", key, val)); err != nil {
+	if _, err := envFile.WriteString(fmt.Sprintf("%s=%s\n", strings.ToUpper(key), val)); err != nil {
 		actionError(fmt.Errorf("could not update %s environment file: %v", envFile.Name(), err))
-		return
 	}
+	actionDebugf("Environment variable %s has been set", strings.ToUpper(key))
 }
