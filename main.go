@@ -21,10 +21,10 @@ func main() {
 	switch {
 	case os.Getenv("GITHUB_ACTION") != "":
 		githubCI = true
-		actionInfo("🐣 Starting to work with GITHUB")
+		actionInfo("🐣 Starting work with GITHUB")
 	case os.Getenv("GITLAB_CI") != "":
 		gitlabCI = true
-		actionInfo("🐣 Starting to work with GITLAB")
+		actionInfo("🐣 Starting work with GITLAB")
 	default:
 		actionStringError("🤡 Unknown CI server name")
 		os.Exit(1)
@@ -64,6 +64,7 @@ func main() {
 		actionError(err)
 		os.Exit(1)
 	}
+	actionDebugf("retrieve: %#v\n", retrieveData)
 	if err := run(domain, clientId, clientSecret, setEnv, retrieveData); err != nil {
 		actionError(err)
 		os.Exit(1)
@@ -80,30 +81,13 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	var envFile *os.File
-	if gitlabCI {
-		jobName := os.Getenv("CI_JOB_NAME")
-		actionInfo("opening file " + jobName + ".env")
-		if jobName == "" {
-			return fmt.Errorf("CI_JOB_NAME environment is not defined")
-		}
-		envFile, err = os.OpenFile(jobName+".env", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return fmt.Errorf("cannot open file %s: %v", jobName+".env", err)
-		}
-	} else if githubCI && setEnv {
-		envFileName := os.Getenv("GITHUB_ENV")
-		if envFileName == "" {
-			return fmt.Errorf("GITHUB_ENV environment file is not defined")
-		}
-		envFile, err = os.OpenFile(envFileName, os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return fmt.Errorf("cannot open file %s: %v", envFileName, err)
-		}
+	envFile, err := actionOpenEnvFile(setEnv)
+	if err != nil {
+		return err
 	}
+	defer envFile.Close()
 
 	actionInfo("✨ Fetching secret(s) from DSV...")
-	actionDebugf("retrieve: %#v\n", retrieveData)
 	for path, dataMap := range retrieveData {
 		actionDebugf("Fetching secret at path %q", path)
 
@@ -127,21 +111,6 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 				actionExportVariable(envFile, outputKey, secretValue)
 			}
 		}
-	}
-	if setEnv {
-		envFile.Close()
-		f, err := os.OpenFile(os.Getenv("CI_JOB_NAME")+".env", os.O_RDWR, 0600)
-		if err != nil {
-			actionError(err)
-			return nil
-		}
-		b := make([]byte, 100)
-		_, err = f.Read(b)
-		if err != nil {
-			actionError(err)
-			return nil
-		}
-		fmt.Println("file read:", string(b))
 	}
 	return nil
 }
@@ -261,9 +230,9 @@ func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (ma
 }
 
 func actionDebug(s string) {
-	// if githubCI {
-	fmt.Printf("::debug::%s\n", s)
-	// }
+	if githubCI {
+		fmt.Printf("::debug::%s\n", s)
+	}
 }
 
 func actionDebugf(format string, args ...interface{}) {
@@ -295,6 +264,34 @@ func actionSetOutput(key, val string) {
 		fmt.Printf("::set-output name=%s::%s\n", key, val)
 		actionDebugf("Output key %s has been set", key)
 	}
+}
+
+func actionOpenEnvFile(setEnv bool) (*os.File, error) {
+	var (
+		envFile *os.File
+		err     error
+	)
+	if gitlabCI {
+		jobName := os.Getenv("CI_JOB_NAME")
+		actionInfo("opening file " + jobName + ".env")
+		if jobName == "" {
+			return nil, fmt.Errorf("CI_JOB_NAME environment is not defined")
+		}
+		envFile, err = os.OpenFile(jobName+".env", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open file %s: %v", jobName+".env", err)
+		}
+	} else if githubCI && setEnv {
+		envFileName := os.Getenv("GITHUB_ENV")
+		if envFileName == "" {
+			return nil, fmt.Errorf("GITHUB_ENV environment file is not defined")
+		}
+		envFile, err = os.OpenFile(envFileName, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open file %s: %v", envFileName, err)
+		}
+	}
+	return envFile, nil
 }
 
 func actionExportVariable(envFile *os.File, key, val string) {
