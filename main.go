@@ -63,11 +63,24 @@ func run(server, clientId, clientSecret string, retrieveData []string) error {
 	if !dataExists {
 		return fmt.Errorf("cannot get secret data from '%s' secret", retrieveData[0])
 	}
-	secretValue, valExists := secretData[retrieveData[1]]
+	secretValue, valExists := secretData[retrieveData[1]].(string)
 	if !valExists {
 		return fmt.Errorf("cannot get '%s' from '%s' secret data", retrieveData[1], retrieveData[0])
 	}
-	fmt.Print(secretValue)
+	if jobName := os.Getenv("CI_JOB_NAME"); jobName != "" {
+		file, err := os.OpenFile(jobName+".env", os.O_CREATE|os.O_RDWR, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("cannot open file %s: %v", jobName+".env", err)
+		}
+		defer file.Close()
+		_, err = file.WriteString(fmt.Sprintf("SECRET=%s\n", secretValue))
+		if err != nil {
+			return fmt.Errorf("cannot write to the file %s: %v", jobName+".env", err)
+		}
+	}
+
+	//
+	// fmt.Print(secretValue)
 	return nil
 }
 
