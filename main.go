@@ -78,9 +78,6 @@ func run(server, clientId, clientSecret string, retrieveData []string) error {
 			return fmt.Errorf("cannot write to the file %s: %v", jobName+".env", err)
 		}
 	}
-
-	//
-	// fmt.Print(secretValue)
 	return nil
 }
 
