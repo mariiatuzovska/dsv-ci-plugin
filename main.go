@@ -81,7 +81,7 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 		return fmt.Errorf("authentication failed: %v", err)
 	}
 
-	envFile, err := actionOpenEnvFile(setEnv)
+	envFile, err := openEnvFile(setEnv)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 
 			actionSetOutput(outputKey, secretValue)
 			if setEnv {
-				actionExportVariable(envFile, outputKey, secretValue)
+				exportVariable(envFile, outputKey, secretValue)
 			}
 		}
 	}
@@ -266,7 +266,7 @@ func actionSetOutput(key, val string) {
 	}
 }
 
-func actionOpenEnvFile(setEnv bool) (*os.File, error) {
+func openEnvFile(setEnv bool) (*os.File, error) {
 	var (
 		envFile *os.File
 		err     error
@@ -294,7 +294,7 @@ func actionOpenEnvFile(setEnv bool) (*os.File, error) {
 	return envFile, nil
 }
 
-func actionExportVariable(envFile *os.File, key, val string) {
+func exportVariable(envFile *os.File, key, val string) {
 	if _, err := envFile.WriteString(fmt.Sprintf("%s=%s\n", strings.ToUpper(key), val)); err != nil {
 		actionError(fmt.Errorf("could not update %s environment file: %v", envFile.Name(), err))
 	}
