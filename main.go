@@ -281,7 +281,7 @@ func openEnvFile(setEnv bool) (*os.File, error) {
 		if pwd == "" {
 			return nil, fmt.Errorf("CI_PROJECT_PATH environment is not defined")
 		}
-		envFileName := path.Join("/builds/", pwd, jobName+".env")
+		envFileName := path.Join("/builds/", pwd, jobName)
 		debugf("opening file %s", envFileName)
 		envFile, err = os.OpenFile(envFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
