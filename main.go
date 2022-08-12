@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -21,37 +22,37 @@ func main() {
 	switch {
 	case os.Getenv("GITHUB_ACTION") != "":
 		githubCI = true
-		actionInfo("🐣 Starting work with GITHUB")
+		info("🐣 Starting work with GITHUB")
 	case os.Getenv("GITLAB_CI") != "":
 		gitlabCI = true
-		actionInfo("🐣 Starting work with GITLAB")
+		info("🐣 Starting work with GITLAB")
 	default:
-		actionStringError("🤡 Unknown CI server name")
+		stringError("🤡 Unknown CI server name")
 		os.Exit(1)
 	}
 
 	// Tenant domain name (e.g. example.secretsvaultcloud.com).
 	domain := os.Getenv("DOMAIN")
 	if domain == "" {
-		actionStringError("domain must be specified")
+		stringError("domain must be specified")
 		os.Exit(1)
 	}
 	// Client ID for authentication.
 	clientId := os.Getenv("CLIENT_ID")
 	if clientId == "" {
-		actionStringError("clientId must be specified")
+		stringError("clientId must be specified")
 		os.Exit(1)
 	}
 	// Client Secret for authentication.
 	clientSecret := os.Getenv("CLIENT_SECRET")
 	if clientSecret == "" {
-		actionStringError("clientSecret must be specified")
+		stringError("clientSecret must be specified")
 		os.Exit(1)
 	}
 	// Data to retrieve from DSV in format `<path> <data key> as <output key>`.
 	retrieve := os.Getenv("RETRIEVE")
 	if retrieve == "" {
-		actionStringError("retrieve string must be specified")
+		stringError("retrieve string must be specified")
 		os.Exit(1)
 	}
 	// Set environment variables in GITHUB. Required GITHUB_ENV environment variable to be a valid path to a file.
@@ -61,12 +62,12 @@ func main() {
 	}
 	retrieveData, err := parseRetrieveFlag(retrieve)
 	if err != nil {
-		actionError(err)
+		printError(err)
 		os.Exit(1)
 	}
-	actionDebugf("retrieve: %#v\n", retrieveData)
+	debugf("retrieve: %#v\n", retrieveData)
 	if err := run(domain, clientId, clientSecret, setEnv, retrieveData); err != nil {
-		actionError(err)
+		printError(err)
 		os.Exit(1)
 	}
 }
@@ -75,7 +76,7 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	apiEndpoint := fmt.Sprintf("https://%s/v1", domain)
 	httpClient := &http.Client{Timeout: defaultTimeout}
 
-	actionInfo("🔑 Fetching access token...")
+	info("🔑 Fetching access token...")
 	token, err := dsvGetToken(httpClient, apiEndpoint, clientId, clientSecret)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %v", err)
@@ -87,9 +88,9 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	}
 	defer envFile.Close()
 
-	actionInfo("✨ Fetching secret(s) from DSV...")
+	info("✨ Fetching secret(s) from DSV...")
 	for path, dataMap := range retrieveData {
-		actionDebugf("Fetching secret at path %q", path)
+		debugf("Fetching secret at path %q", path)
 
 		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, path)
 		if err != nil {
@@ -229,21 +230,21 @@ func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (ma
 	return secret, nil
 }
 
-func actionDebug(s string) {
+func debug(s string) {
 	if githubCI {
 		fmt.Printf("::debug::%s\n", s)
 	}
 }
 
-func actionDebugf(format string, args ...interface{}) {
-	actionDebug(fmt.Sprintf(format, args...))
+func debugf(format string, args ...interface{}) {
+	debug(fmt.Sprintf(format, args...))
 }
 
-func actionInfo(s string) {
+func info(s string) {
 	fmt.Println(s)
 }
 
-func actionError(err error) {
+func printError(err error) {
 	if githubCI {
 		fmt.Printf("::error::%v\n", err)
 	} else if gitlabCI {
@@ -251,7 +252,7 @@ func actionError(err error) {
 	}
 }
 
-func actionStringError(s string) {
+func stringError(s string) {
 	if githubCI {
 		fmt.Printf("::error::%s\n", s)
 	} else if gitlabCI {
@@ -262,7 +263,7 @@ func actionStringError(s string) {
 func actionSetOutput(key, val string) {
 	if githubCI {
 		fmt.Printf("::set-output name=%s::%s\n", key, val)
-		actionDebugf("Output key %s has been set", key)
+		debugf("Output key %s has been set", key)
 	}
 }
 
@@ -273,13 +274,18 @@ func openEnvFile(setEnv bool) (*os.File, error) {
 	)
 	if gitlabCI {
 		jobName := os.Getenv("CI_JOB_NAME")
-		actionDebugf("opening file %s.env", jobName)
 		if jobName == "" {
 			return nil, fmt.Errorf("CI_JOB_NAME environment is not defined")
 		}
-		envFile, err = os.OpenFile(jobName+".env", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		pwd := os.Getenv("CI_PROJECT_PATH")
+		if pwd == "" {
+			return nil, fmt.Errorf("CI_PROJECT_PATH environment is not defined")
+		}
+		envFileName := path.Join("/builds/", pwd, jobName+".env")
+		debugf("opening file %s", envFileName)
+		envFile, err = os.OpenFile(envFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			return nil, fmt.Errorf("cannot open file %s: %v", jobName+".env", err)
+			return nil, fmt.Errorf("cannot open file %s: %v", envFileName, err)
 		}
 	} else if githubCI && setEnv {
 		envFileName := os.Getenv("GITHUB_ENV")
@@ -296,7 +302,7 @@ func openEnvFile(setEnv bool) (*os.File, error) {
 
 func exportVariable(envFile *os.File, key, val string) {
 	if _, err := envFile.WriteString(fmt.Sprintf("%s=%s\n", strings.ToUpper(key), val)); err != nil {
-		actionError(fmt.Errorf("could not update %s environment file: %v", envFile.Name(), err))
+		printError(fmt.Errorf("could not update %s environment file: %v", envFile.Name(), err))
 	}
-	actionDebugf("Environment variable %s has been set", strings.ToUpper(key))
+	debugf("Environment variable %s has been set", strings.ToUpper(key))
 }
