@@ -1,6 +1,6 @@
-# DSV GitHub Action
+# DSV CI plugin
 
-Delinea DevOps Secrets Vault (DSV) GitHub Action allows you to access and reference your Secrets data available for use in GitHub Actions.
+Delinea DevOps Secrets Vault (DSV) CI plugin allows you to access and reference your Secrets data available for use in GitHub Actions or in GitLab Jobs.
 
 ## Inputs
 
@@ -13,13 +13,13 @@ Delinea DevOps Secrets Vault (DSV) GitHub Action allows you to access and refere
 | `retrieve`     | Data to retrieve from DSV in format `<path> <data key> as <output key>`. |
 
 
-## Usage
+## GitHub usage
 
-```
+```yaml
 steps:
 - name: Read secrets from DSV
   id: dsv
-  uses: mariiatuzovska/secret-vault-github-action-plugin@v0.10.0
+  uses: mariiatuzovska/dsv-ci-plugin@v6.0
   with:
     domain: ${{ secrets.DSV_SERVER }}
     clientId: ${{ secrets.DSV_CLIENT_ID }}
@@ -34,6 +34,46 @@ steps:
 
 - name: Print secret using environment virable (only available if `setEnv` was set to `true`)
   run: echo ${{ env.myVal2 }}
+```
+
+## GitLab usage
+
+```yaml
+stages:
+  - my_stage
+
+retrieve_secrets:
+    image: 
+      name: mariiatuzovska/dsv-ci-plugin:v1.0
+    stage: my_stage
+    # setup input variables
+    variables:
+        DOMAIN: $DOMAIN
+        CLIENT_ID: $CLIENT_ID
+        CLIENT_SECRET: $CLIENT_SECRET
+        RETRIEVE: |
+            $SECRET_PATH $MY_SECRET_KEY_1 AS secret_val
+            $SECRET_PATH $MY_SECRET_KEY_2 AS my_secret
+            $SECRET_PATH $MY_SECRET_KEY_3 AS my_val
+
+    # run docker image with input variables
+    script:
+        - ""
+    artifacts:
+        reports:
+          dotenv: $CI_JOB_NAME
+
+test:
+    stage: my_stage
+    script:
+      - echo "test"
+      - echo $SECRET_VAL
+      - echo $MY_SECRET
+      - echo $MY_VAL
+    needs:
+    - job: retrieve_secrets
+      artifacts: true
+
 ```
 
 ## Licensing
