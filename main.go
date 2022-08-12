@@ -273,7 +273,7 @@ func actionOpenEnvFile(setEnv bool) (*os.File, error) {
 	)
 	if gitlabCI {
 		jobName := os.Getenv("CI_JOB_NAME")
-		actionInfo("opening file " + jobName + ".env")
+		actionDebugf("opening file %s.env", jobName)
 		if jobName == "" {
 			return nil, fmt.Errorf("CI_JOB_NAME environment is not defined")
 		}
