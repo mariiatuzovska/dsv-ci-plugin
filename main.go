@@ -80,8 +80,10 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	info("🔑 Fetching access token...")
 	token, err := dsvGetToken(httpClient, apiEndpoint, clientId, clientSecret)
 	if err != nil {
-		return fmt.Errorf("authentication failed: %v", err)
+		debugf("authentication failed: %v", err)
+		return fmt.Errorf("unable to get token")
 	}
+	debug("Got access token")
 
 	envFile, err := openEnvFile(setEnv)
 	if err != nil {
@@ -96,27 +98,35 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 
 		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, path)
 		if err != nil {
-			return fmt.Errorf("failed to fetch secret from DSV: %v", err)
+			debugf("failed to fetch secret from DSV: %v", err)
+			return fmt.Errorf("unable to get secret")
 		}
 		debugf("Got secret at path %q", path)
 
 		secretData, ok := secret["data"].(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("cannot get secret data from '%s' secret", path)
+			debugf("cannot get secret data from '%s' secret", path)
+			return fmt.Errorf("cannot parse secret")
 		}
 
 		for secretDataKey, outputKey := range dataMap {
 			debugf("Getting %s field from secret at path %s", secretDataKey, path)
 			secretValue, ok := secretData[secretDataKey].(string)
 			if !ok {
-				return fmt.Errorf("cannot get '%s' from '%s' secret data", secretDataKey, path)
+				debugf("cannot get '%s' from '%s' secret data", secretDataKey, path)
+				return fmt.Errorf("cannot parse secret")
 			}
 			debugf("Got %s field from secret at path %s", secretDataKey, path)
 
-			actionSetOutput(outputKey, secretValue)
+			if githubCI {
+				actionSetOutput(outputKey, secretValue)
+				debugf("Output %s has been set as value '%s' from secret at path %s",
+					strings.ToUpper(outputKey), secretDataKey, path)
+			}
 			if setEnv {
 				if err := exportVariable(envFile, outputKey, secretValue); err != nil {
-					return err
+					debugf("exporting variable error: %v", err)
+					return fmt.Errorf("cannot set environment variable")
 				}
 				debugf("Environment variable %s has been set as value %s from %s secret",
 					strings.ToUpper(outputKey), secretDataKey, path)
@@ -244,7 +254,7 @@ func debug(s string) {
 	if githubCI {
 		fmt.Printf("::debug::%s\n", s)
 	} else if gitlabCI && gitlabCIDebug {
-		fmt.Printf("%s\n", s)
+		fmt.Printf("##[debug]\x1b[94m%s\x1b[0m\n", s)
 	}
 }
 
@@ -278,10 +288,7 @@ func stringError(s string) {
 }
 
 func actionSetOutput(key, val string) {
-	if githubCI {
-		fmt.Printf("::set-output name=%s::%s\n", key, val)
-		debugf("Output key %s has been set", key)
-	}
+	fmt.Printf("::set-output name=%s::%s\n", key, val)
 }
 
 func openEnvFile(setEnv bool) (*os.File, error) {
@@ -306,7 +313,7 @@ func openEnvFile(setEnv bool) (*os.File, error) {
 	} else if githubCI && setEnv {
 		envFileName := os.Getenv("GITHUB_ENV")
 		if envFileName == "" {
-			return nil, fmt.Errorf("GITHUB_ENV environment file is not defined")
+			return nil, fmt.Errorf("GITHUB_ENV environment is not defined")
 		}
 		envFile, err = os.OpenFile(envFileName, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
