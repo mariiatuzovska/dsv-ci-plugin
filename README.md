@@ -46,7 +46,6 @@ retrieve_secrets:
     image: 
       name: mariiatuzovska/dsv-ci-plugin:v1.0
     stage: my_stage
-    # setup input variables
     variables:
         DOMAIN: $DOMAIN
         CLIENT_ID: $CLIENT_ID
@@ -55,8 +54,6 @@ retrieve_secrets:
             $SECRET_PATH $MY_SECRET_KEY_1 AS secretval
             $SECRET_PATH $MY_SECRET_KEY_2 AS mysecret
             $SECRET_PATH $MY_SECRET_KEY_3 AS myval
-
-    # run docker image with input variables
     script:
         - ""
     artifacts:
