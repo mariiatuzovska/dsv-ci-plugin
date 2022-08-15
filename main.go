@@ -16,7 +16,7 @@ import (
 // defaultTimeout defines default timeout for HTTP requests.
 const defaultTimeout = time.Second * 5
 
-var githubCI, gitlabCI bool = false, false
+var githubCI, gitlabCI bool
 
 func main() {
 	switch {
