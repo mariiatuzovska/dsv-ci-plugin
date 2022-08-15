@@ -19,7 +19,7 @@ Delinea DevOps Secrets Vault (DSV) CI plugin allows you to access and reference 
 steps:
 - name: Read secrets from DSV
   id: dsv
-  uses: mariiatuzovska/dsv-ci-plugin@v6.0
+  uses: mariiatuzovska/dsv-ci-plugin@v6.1
   with:
     domain: ${{ secrets.DSV_SERVER }}
     clientId: ${{ secrets.DSV_CLIENT_ID }}
@@ -44,7 +44,7 @@ stages:
 
 retrieve_secrets:
     image: 
-      name: mariiatuzovska/dsv-ci-plugin:v1.0
+      name: mariiatuzovska/dsv-ci-plugin:v1.1
     stage: my_stage
     variables:
         DOMAIN: $DOMAIN
