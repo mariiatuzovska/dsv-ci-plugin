@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
 	"reflect"
 	"testing"
 )
@@ -16,6 +18,50 @@ type MockHttpClient struct {
 
 func (m *MockHttpClient) Do(req *http.Request) (*http.Response, error) {
 	return m.response, m.err
+}
+
+func TestMain(t *testing.T) {
+	if os.Getenv("FATAL") == "1" {
+		main()
+		return
+	}
+	cases := []struct {
+		name string
+		envs []string
+	}{
+		{
+			name: "no variable set",
+			envs: []string{
+				"FATAL=1",
+			},
+		},
+		{
+			name: "domain is not set",
+			envs: []string{
+				"FATAL=1",
+				"GITLAB_CI=true",
+			},
+		},
+		{
+			name: "client_id is not set",
+			envs: []string{
+				"FATAL=1",
+				"GITLAB_CI=true",
+				"CLIENT_ID=client_id",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd := exec.Command(os.Args[0], "-test.run=TestMain")
+			cmd.Env = append(os.Environ(), tc.envs...)
+			err := cmd.Run()
+			if e, ok := err.(*exec.ExitError); ok && e.ExitCode() != 1 {
+				t.Fatalf("process ran with err '%v', want exit status 1", err)
+			}
+		})
+	}
 }
 
 func TestParseRetrieveFlag(t *testing.T) {
@@ -288,6 +334,83 @@ func TestDsvGetSecret(t *testing.T) {
 			if !reflect.DeepEqual(tc.want, result) {
 				t.Errorf("want %v, got %v", tc.want, result)
 			}
+		})
+	}
+}
+
+func TestOpenEnvFile(t *testing.T) {
+	cases := []struct {
+		name     string
+		envs     map[string]string
+		gitlabCI bool
+		githubCI bool
+		wantErr  error
+	}{
+		{
+			name: "gitlabCI: no variable set",
+			envs: map[string]string{
+				"CI_JOB_NAME":     "",
+				"CI_PROJECT_PATH": "",
+				"GITHUB_ENV":      "",
+			},
+			gitlabCI: true,
+			wantErr:  fmt.Errorf("CI_JOB_NAME environment is not defined"),
+		},
+		{
+			name: "githubCI: no variable set",
+			envs: map[string]string{
+				"CI_JOB_NAME":     "",
+				"CI_PROJECT_PATH": "",
+				"GITHUB_ENV":      "",
+			},
+			githubCI: true,
+			wantErr:  fmt.Errorf("GITHUB_ENV environment file is not defined"),
+		},
+		{
+			name: "githubCI: cannot open file",
+			envs: map[string]string{
+				"CI_JOB_NAME":     "",
+				"CI_PROJECT_PATH": "",
+				"GITHUB_ENV":      "./myfile",
+			},
+			githubCI: true,
+			wantErr:  fmt.Errorf("cannot open file ./myfile: open ./myfile: no such file or directory"),
+		},
+		{
+			name: "gitlabCI: no CI_PROJECT_PATH",
+			envs: map[string]string{
+				"CI_JOB_NAME":     "some_job",
+				"CI_PROJECT_PATH": "",
+				"GITHUB_ENV":      "",
+			},
+			gitlabCI: true,
+			wantErr:  fmt.Errorf("CI_PROJECT_PATH environment is not defined"),
+		},
+		{
+			name: "gitlabCI: cannot open file",
+			envs: map[string]string{
+				"CI_JOB_NAME":     "some_job",
+				"CI_PROJECT_PATH": "some_project",
+				"GITHUB_ENV":      "",
+			},
+			gitlabCI: true,
+			wantErr:  fmt.Errorf("cannot open file /builds/some_project/some_job: open /builds/some_project/some_job: no such file or directory"),
+		},
+	}
+	limit := make(chan struct{}, 1)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			limit <- struct{}{}
+			githubCI = tc.githubCI
+			gitlabCI = tc.gitlabCI
+			for key, val := range tc.envs {
+				os.Setenv(key, val)
+			}
+			_, err := openEnvFile(true)
+			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
+				t.Errorf("want error %v, got %v", tc.wantErr, err)
+			}
+			<-limit
 		})
 	}
 }

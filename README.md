@@ -27,13 +27,13 @@ steps:
     setEnv: true
     retrieve: |
       ${{ secrets.DSV_SECRET_PATH_ONE }} ${{ secrets.DSV_SECRET_KEY_ONE }} AS myVal1
-      ${{ secrets.DSV_SECRET_PATH_TWO }} ${{ secrets.DSV_SECRET_KEY_TWO }} AS myVal2
+      ${{ secrets.DSV_SECRET_PATH_TWO }} ${{ secrets.DSV_SECRET_KEY_TWO }} AS MYVAL2
 
 - name: Print secret referencing ID of the step.
   run: echo ${{ steps.dsv.outputs.myVal1 }}
 
 - name: Print secret using environment virable (only available if `setEnv` was set to `true`)
-  run: echo ${{ env.myVal2 }}
+  run: echo ${{ env.MYVAL2 }}
 ```
 
 ## GitLab usage
@@ -52,9 +52,9 @@ retrieve_secrets:
         CLIENT_ID: $CLIENT_ID
         CLIENT_SECRET: $CLIENT_SECRET
         RETRIEVE: |
-            $SECRET_PATH $MY_SECRET_KEY_1 AS secret_val
-            $SECRET_PATH $MY_SECRET_KEY_2 AS my_secret
-            $SECRET_PATH $MY_SECRET_KEY_3 AS my_val
+            $SECRET_PATH $MY_SECRET_KEY_1 AS secretval
+            $SECRET_PATH $MY_SECRET_KEY_2 AS mysecret
+            $SECRET_PATH $MY_SECRET_KEY_3 AS myval
 
     # run docker image with input variables
     script:
@@ -67,9 +67,9 @@ test:
     stage: my_stage
     script:
       - echo "test"
-      - echo $SECRET_VAL
-      - echo $MY_SECRET
-      - echo $MY_VAL
+      - echo $SECRETVAL
+      - echo $MYSECRET
+      - echo $MYVAL
     needs:
     - job: retrieve_secrets
       artifacts: true
