@@ -25,36 +25,36 @@ var (
 func main() {
 	switch {
 	case githubCI:
-		info("🐣 Starting work with GitHub CI")
+		info("🐣 Starting work with GitHub CI.")
 	case gitlabCI:
-		info("🐣 Starting work with GitLab CI")
+		info("🐣 Starting work with GitLab CI.")
 	default:
-		stringError("🤡 Unknown CI server")
+		stringError("🤡 Unknown CI server.")
 		os.Exit(1)
 	}
 
 	// Tenant domain name (e.g. example.secretsvaultcloud.com).
 	domain := os.Getenv("DOMAIN")
 	if domain == "" {
-		stringError("DOMAIN variable must be specified")
+		stringError("DOMAIN variable must be specified.")
 		os.Exit(1)
 	}
 	// Client ID for authentication.
 	clientId := os.Getenv("CLIENT_ID")
 	if clientId == "" {
-		stringError("CLIENT_ID variable must be specified")
+		stringError("CLIENT_ID variable must be specified.")
 		os.Exit(1)
 	}
 	// Client Secret for authentication.
 	clientSecret := os.Getenv("CLIENT_SECRET")
 	if clientSecret == "" {
-		stringError("CLIENT_SECRET variable must be specified")
+		stringError("CLIENT_SECRET variable must be specified.")
 		os.Exit(1)
 	}
 	// Data to retrieve from DSV in format `<path> <data key> as <output key>`.
 	retrieve := os.Getenv("RETRIEVE")
 	if retrieve == "" {
-		stringError("RETRIEVE variable must be specified")
+		stringError("RETRIEVE variable must be specified.")
 		os.Exit(1)
 	}
 	// Set environment variables in GITHUB. Required GITHUB_ENV environment variable to be a valid path to a file.
@@ -80,10 +80,9 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	info("🔑 Fetching access token...")
 	token, err := dsvGetToken(httpClient, apiEndpoint, clientId, clientSecret)
 	if err != nil {
-		debugf("authentication failed: %v", err)
-		return fmt.Errorf("unable to get token")
+		debugf("Authentication failed: %v", err)
+		return fmt.Errorf("unable to get access token")
 	}
-	debug("Got access token")
 
 	envFile, err := openEnvFile(setEnv)
 	if err != nil {
@@ -92,44 +91,40 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 	defer envFile.Close()
 
 	info("✨ Fetching secret(s) from DSV...")
-	debugf("RETRIEVE: %#v\n", retrieveData)
+
 	for path, dataMap := range retrieveData {
-		debugf("Fetching secret at path %q", path)
+		debugf("%q: Start processing...", path)
 
 		secret, err := dsvGetSecret(httpClient, apiEndpoint, token, path)
 		if err != nil {
-			debugf("failed to fetch secret from DSV: %v", err)
+			debugf("%q: Failed to fetch secret: %v.", path, err)
 			return fmt.Errorf("unable to get secret")
 		}
-		debugf("Got secret at path %q", path)
 
 		secretData, ok := secret["data"].(map[string]interface{})
 		if !ok {
-			debugf("cannot get secret data from '%s' secret", path)
+			debugf("%q: Cannot get data from secret.", path)
 			return fmt.Errorf("cannot parse secret")
 		}
 
-		for secretDataKey, outputKey := range dataMap {
-			debugf("Getting %s field from secret at path %s", secretDataKey, path)
-			secretValue, ok := secretData[secretDataKey].(string)
+		for dataKey, outputKey := range dataMap {
+			val, ok := secretData[dataKey].(string)
 			if !ok {
-				debugf("cannot get '%s' from '%s' secret data", secretDataKey, path)
-				return fmt.Errorf("cannot parse secret")
+				debugf("%q: Key %q not found in data.", path, dataKey)
+				return fmt.Errorf("specified field was not found in data")
 			}
-			debugf("Got %s field from secret at path %s", secretDataKey, path)
+			debugf("%q: Found %q key in data.", path, dataKey)
 
 			if githubCI {
-				actionSetOutput(outputKey, secretValue)
-				debugf("Output %s has been set as value '%s' from secret at path %s",
-					strings.ToUpper(outputKey), secretDataKey, path)
+				actionSetOutput(outputKey, val)
+				debugf("%q: Set output %q as value in %q.", path, outputKey, dataKey)
 			}
 			if setEnv {
-				if err := exportVariable(envFile, outputKey, secretValue); err != nil {
-					debugf("exporting variable error: %v", err)
+				if err := exportVariable(envFile, outputKey, val); err != nil {
+					debugf("%q: Exporting variable error: %v.", path, err)
 					return fmt.Errorf("cannot set environment variable")
 				}
-				debugf("Environment variable %s has been set as value %s from %s secret",
-					strings.ToUpper(outputKey), secretDataKey, path)
+				debugf("%q: Set env var %q as value in %q.", path, strings.ToUpper(outputKey), dataKey)
 			}
 		}
 	}
