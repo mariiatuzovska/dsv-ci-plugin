@@ -25,9 +25,9 @@ var (
 func main() {
 	switch {
 	case githubCI:
-		info("🐣 Starting work with GITHUB CI")
+		info("🐣 Starting work with GitHub CI")
 	case gitlabCI:
-		info("🐣 Starting work with GITLAB CI")
+		info("🐣 Starting work with GitLab CI")
 	default:
 		stringError("🤡 Unknown CI server")
 		os.Exit(1)
