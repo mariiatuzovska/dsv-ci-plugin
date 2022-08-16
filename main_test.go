@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"reflect"
 	"testing"
 )
@@ -18,50 +17,6 @@ type MockHttpClient struct {
 
 func (m *MockHttpClient) Do(req *http.Request) (*http.Response, error) {
 	return m.response, m.err
-}
-
-func TestMain(t *testing.T) {
-	if os.Getenv("FATAL") == "1" {
-		main()
-		return
-	}
-	cases := []struct {
-		name string
-		envs []string
-	}{
-		{
-			name: "no variable set",
-			envs: []string{
-				"FATAL=1",
-			},
-		},
-		{
-			name: "domain is not set",
-			envs: []string{
-				"FATAL=1",
-				"GITLAB_CI=true",
-			},
-		},
-		{
-			name: "client_id is not set",
-			envs: []string{
-				"FATAL=1",
-				"GITLAB_CI=true",
-				"CLIENT_ID=client_id",
-			},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			cmd := exec.Command(os.Args[0], "-test.run=TestMain")
-			cmd.Env = append(os.Environ(), tc.envs...)
-			err := cmd.Run()
-			if e, ok := err.(*exec.ExitError); ok && e.ExitCode() != 1 {
-				t.Fatalf("process ran with err '%v', want exit status 1", err)
-			}
-		})
-	}
 }
 
 func TestParseRetrieveFlag(t *testing.T) {
@@ -364,7 +319,7 @@ func TestOpenEnvFile(t *testing.T) {
 				"GITHUB_ENV":      "",
 			},
 			githubCI: true,
-			wantErr:  fmt.Errorf("GITHUB_ENV environment file is not defined"),
+			wantErr:  fmt.Errorf("GITHUB_ENV environment is not defined"),
 		},
 		{
 			name: "githubCI: cannot open file",
@@ -397,10 +352,8 @@ func TestOpenEnvFile(t *testing.T) {
 			wantErr:  fmt.Errorf("cannot open file /builds/some_project/some_job: open /builds/some_project/some_job: no such file or directory"),
 		},
 	}
-	limit := make(chan struct{}, 1)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			limit <- struct{}{}
 			githubCI = tc.githubCI
 			gitlabCI = tc.gitlabCI
 			for key, val := range tc.envs {
@@ -410,7 +363,6 @@ func TestOpenEnvFile(t *testing.T) {
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
 				t.Errorf("want error %v, got %v", tc.wantErr, err)
 			}
-			<-limit
 		})
 	}
 }
