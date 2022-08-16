@@ -191,29 +191,13 @@ func dsvGetToken(c httpClient, apiEndpoint, cid, csecret string) (string, error)
 		return "", fmt.Errorf("could not build request: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Delinea-DSV-Client", "gh-action")
-
-	resp, err := c.Do(req)
-	if err != nil {
+	resp := make(map[string]interface{})
+	if err = sendRequest(c, req, &resp); err != nil {
 		return "", fmt.Errorf("API call failed: %v", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("POST %s: %s", endpoint, resp.Status)
-	}
 
-	body, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("could not read response body: %v", err)
-	}
-	tokenRespData := make(map[string]interface{})
-	err = json.Unmarshal(body, &tokenRespData)
-	if err != nil {
-		return "", fmt.Errorf("could not unmarshal response body: %v", err)
-	}
-
-	token, strExists := tokenRespData["accessToken"].(string)
-	if !strExists {
+	token, ok := resp["accessToken"].(string)
+	if !ok {
 		return "", fmt.Errorf("could not read access token from response")
 	}
 	return token, nil
@@ -226,28 +210,40 @@ func dsvGetSecret(c httpClient, apiEndpoint, accessToken, secretPath string) (ma
 		return nil, fmt.Errorf("could not build request: %v", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Delinea-DSV-Client", "gh-action")
 	req.Header.Set("Authorization", accessToken)
+
+	resp := make(map[string]interface{})
+	if err = sendRequest(c, req, &resp); err != nil {
+		return nil, fmt.Errorf("API call failed: %v", err)
+	}
+	return resp, nil
+}
+
+func sendRequest(c httpClient, req *http.Request, out any) error {
+	req.Header.Set("Content-Type", "application/json")
+	if githubCI {
+		req.Header.Set("Delinea-DSV-Client", "github-action")
+	} else if gitlabCI {
+		req.Header.Set("Delinea-DSV-Client", "gitlab-job")
+	}
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API call failed: %v", err)
+		return err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: %s", endpoint, resp.Status)
+		return fmt.Errorf("%s %s: %s", req.Method, req.URL, resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("could not read response body: %v", err)
+		return fmt.Errorf("could not read response body: %v", err)
 	}
-	secret := make(map[string]interface{})
-	err = json.Unmarshal(body, &secret)
-	if err != nil {
-		return nil, fmt.Errorf("could not unmarshal response body: %v", err)
+
+	if err = json.Unmarshal(body, &out); err != nil {
+		return fmt.Errorf("could not unmarshal response body: %v", err)
 	}
-	return secret, nil
+	return nil
 }
 
 func debug(s string) {
