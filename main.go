@@ -19,7 +19,7 @@ const (
 	ClientIDEnv     = "CLIENT_ID"     // Client ID for authentication.
 	ClientSecretEnv = "CLIENT_SECRET" // Client Secret for authentication.
 	RetrieveEnv     = "RETRIEVE"      // Rows with data to retrieve from DSV in format `<path> <data key> as <output key>`.
-	SetEnvEnv       = "SET_ENV"       // Set env variables. Applicable only for GitHub.
+	SetEnvEnv       = "SET_ENV"       // Set env variables. Applicable only for GitHub Actions.
 )
 
 // defaultTimeout defines default timeout for HTTP requests.
