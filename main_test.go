@@ -74,7 +74,7 @@ func TestParseRetrieveFlag(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := parseRetrieveFlag(tc.retrieve)
+			result, err := parseRetrieve(tc.retrieve)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
 				t.Errorf("want error:\n\t%v\ngot:\n\t%v", tc.wantErr, err)
 			}

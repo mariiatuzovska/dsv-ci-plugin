@@ -13,6 +13,15 @@ import (
 	"time"
 )
 
+// List of environment variables names used as input.
+const (
+	DomainEnv       = "DOMAIN"        // Tenant domain name (e.g. example.secretsvaultcloud.com).
+	ClientIDEnv     = "CLIENT_ID"     // Client ID for authentication.
+	ClientSecretEnv = "CLIENT_SECRET" // Client Secret for authentication.
+	RetrieveEnv     = "RETRIEVE"      // Rows with data to retrieve from DSV in format `<path> <data key> as <output key>`.
+	SetEnvEnv       = "SET_ENV"       // Set env variables. Applicable only for GitHub.
+)
+
 // defaultTimeout defines default timeout for HTTP requests.
 const defaultTimeout = time.Second * 5
 
@@ -25,55 +34,41 @@ var (
 func main() {
 	switch {
 	case githubCI:
-		info("🐣 Starting work with GitHub CI.")
+		info("🐣 Start working with GitHub CI.")
 	case gitlabCI:
-		info("🐣 Starting work with GitLab CI.")
+		info("🐣 Start working with GitLab CI.")
 	default:
-		stringError("🤡 Unknown CI server.")
+		printError(fmt.Errorf("🤡 Unknown CI server."))
 		os.Exit(1)
 	}
 
-	// Tenant domain name (e.g. example.secretsvaultcloud.com).
-	domain := os.Getenv("DOMAIN")
-	if domain == "" {
-		stringError("DOMAIN variable must be specified.")
-		os.Exit(1)
+	readEnv := func(name string) string {
+		val := os.Getenv(name)
+		if val == "" {
+			printError(fmt.Errorf("Environment variable %q is required and cannot be empty.", name))
+			os.Exit(1)
+		}
+		return val
 	}
-	// Client ID for authentication.
-	clientId := os.Getenv("CLIENT_ID")
-	if clientId == "" {
-		stringError("CLIENT_ID variable must be specified.")
-		os.Exit(1)
-	}
-	// Client Secret for authentication.
-	clientSecret := os.Getenv("CLIENT_SECRET")
-	if clientSecret == "" {
-		stringError("CLIENT_SECRET variable must be specified.")
-		os.Exit(1)
-	}
-	// Data to retrieve from DSV in format `<path> <data key> as <output key>`.
-	retrieve := os.Getenv("RETRIEVE")
-	if retrieve == "" {
-		stringError("RETRIEVE variable must be specified.")
-		os.Exit(1)
-	}
-	// Set environment variables in GITHUB. Required GITHUB_ENV environment variable to be a valid path to a file.
-	setEnv := false
-	if (githubCI && os.Getenv("SET_ENV") != "") || gitlabCI {
-		setEnv = true
-	}
-	retrieveData, err := parseRetrieveFlag(retrieve)
-	if err != nil {
-		printError(err)
-		os.Exit(1)
-	}
-	if err := run(domain, clientId, clientSecret, setEnv, retrieveData); err != nil {
+
+	domain := readEnv(DomainEnv)
+	clientId := readEnv(ClientIDEnv)
+	clientSecret := readEnv(ClientSecretEnv)
+	retrieve := readEnv(RetrieveEnv)
+	setEnv := (githubCI && os.Getenv(SetEnvEnv) != "") || gitlabCI
+
+	if err := run(domain, clientId, clientSecret, retrieve, setEnv); err != nil {
 		printError(err)
 		os.Exit(1)
 	}
 }
 
-func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[string]map[string]string) error {
+func run(domain, clientId, clientSecret, retrieve string, setEnv bool) error {
+	retrieveData, err := parseRetrieve(retrieve)
+	if err != nil {
+		return err
+	}
+
 	apiEndpoint := fmt.Sprintf("https://%s/v1", domain)
 	httpClient := &http.Client{Timeout: defaultTimeout}
 
@@ -117,21 +112,21 @@ func run(domain, clientId, clientSecret string, setEnv bool, retrieveData map[st
 
 			if githubCI {
 				actionSetOutput(outputKey, val)
-				debugf("%q: Set output %q as value in %q.", path, outputKey, dataKey)
+				debugf("%q: Set output %q to value in %q.", path, outputKey, dataKey)
 			}
 			if setEnv {
 				if err := exportVariable(envFile, outputKey, val); err != nil {
 					debugf("%q: Exporting variable error: %v.", path, err)
 					return fmt.Errorf("cannot set environment variable")
 				}
-				debugf("%q: Set env var %q as value in %q.", path, strings.ToUpper(outputKey), dataKey)
+				debugf("%q: Set env var %q to value in %q.", path, strings.ToUpper(outputKey), dataKey)
 			}
 		}
 	}
 	return nil
 }
 
-func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
+func parseRetrieve(retrieve string) (map[string]map[string]string, error) {
 	pathRegexp := regexp.MustCompile(`^[a-zA-Z0-9:\/@\+._-]+$`)
 	whitespaces := regexp.MustCompile(`\s+`)
 
@@ -268,14 +263,6 @@ func printError(err error) {
 		fmt.Printf("::error::%v\n", err)
 	} else if gitlabCI {
 		fmt.Printf("\x1b[91m%v\x1b[0m\n", err)
-	}
-}
-
-func stringError(s string) {
-	if githubCI {
-		fmt.Printf("::error::%s\n", s)
-	} else if gitlabCI {
-		fmt.Printf("\x1b[91m%s\x1b[0m\n", s)
 	}
 }
 
