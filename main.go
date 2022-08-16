@@ -150,10 +150,10 @@ func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
 		row = whitespaces.ReplaceAllString(row, " ")
 
 		tokens := strings.Split(row, " ")
-
 		if len(tokens) != 4 {
-			return nil, fmt.Errorf("failed to parse '%s'. "+
-				"each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces and/or tabs", row)
+			return nil, fmt.Errorf(
+				"invalid row: '%s'. Expected format: '<secret path> <secret data key> as <output key>'", row,
+			)
 		}
 
 		var (
@@ -162,9 +162,10 @@ func parseRetrieveFlag(retrieve string) (map[string]map[string]string, error) {
 			outputKey = tokens[3]
 		)
 		if !pathRegexp.MatchString(path) {
-			return nil, fmt.Errorf("failed to parse secret path '%s': "+
-				"secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash",
-				path)
+			return nil, fmt.Errorf(
+				"invalid path: '%s'. Secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash",
+				path,
+			)
 		}
 
 		if _, ok := result[path]; !ok {

@@ -57,29 +57,29 @@ func TestParseRetrieveFlag(t *testing.T) {
 			secret$ 					mykey2 as key2
 			`,
 			want:    nil,
-			wantErr: fmt.Errorf("failed to parse secret path 'secret$': secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash"),
+			wantErr: fmt.Errorf("invalid path: 'secret$'. Secret path may contain only letters, numbers, underscores, dashes, @, pluses and periods separated by colon or slash"),
 		},
 		{
 			name:     "too many args",
 			retrieve: `arg1 arg2 as arg3 arg4`,
 			want:     nil,
-			wantErr:  fmt.Errorf("failed to parse 'arg1 arg2 as arg3 arg4'. each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces and/or tabs"),
+			wantErr:  fmt.Errorf("invalid row: 'arg1 arg2 as arg3 arg4'. Expected format: '<secret path> <secret data key> as <output key>'"),
 		},
 		{
 			name:     "less args",
 			retrieve: `arg1 arg2`,
 			want:     nil,
-			wantErr:  fmt.Errorf("failed to parse 'arg1 arg2'. each 'retrieve' row must contain '<secret path> <secret data key> as <output key>' separated by spaces and/or tabs"),
+			wantErr:  fmt.Errorf("invalid row: 'arg1 arg2'. Expected format: '<secret path> <secret data key> as <output key>'"),
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := parseRetrieveFlag(tc.retrieve)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
-				t.Errorf("want error %v, got %v", tc.wantErr, err)
+				t.Errorf("want error:\n\t%v\ngot:\n\t%v", tc.wantErr, err)
 			}
 			if !reflect.DeepEqual(tc.want, result) {
-				t.Errorf("want %v, got %v", tc.want, result)
+				t.Errorf("want:\n\t%v\ngot:\n\t%v", tc.want, result)
 			}
 		})
 	}
@@ -127,7 +127,7 @@ func TestDsvGetToken(t *testing.T) {
 				err: nil,
 			},
 			want:    "",
-			wantErr: fmt.Errorf("POST test.example.com/token: 400 Bad Request"),
+			wantErr: fmt.Errorf("API call failed: POST test.example.com/token: 400 Bad Request"),
 		},
 		{
 			name:        "empty endpoint",
@@ -143,7 +143,7 @@ func TestDsvGetToken(t *testing.T) {
 				err: nil,
 			},
 			want:    "",
-			wantErr: fmt.Errorf("POST /token: 400 Bad Request"),
+			wantErr: fmt.Errorf("API call failed: POST /token: 400 Bad Request"),
 		},
 		{
 			name:        "http error",
@@ -171,7 +171,7 @@ func TestDsvGetToken(t *testing.T) {
 				err: nil,
 			},
 			want:    "",
-			wantErr: fmt.Errorf("could not unmarshal response body: unexpected end of JSON input"),
+			wantErr: fmt.Errorf("API call failed: could not unmarshal response body: unexpected end of JSON input"),
 		},
 		{
 			name:        "no access token",
@@ -196,10 +196,10 @@ func TestDsvGetToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := dsvGetToken(tc.client, tc.apiEndpoint, tc.cid, tc.csecret)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
-				t.Errorf("want error %v, got %v", tc.wantErr, err)
+				t.Errorf("want error:\n\t%v\ngot:\n\t%v", tc.wantErr, err)
 			}
 			if tc.want != result {
-				t.Errorf("want %v, got %v", tc.want, result)
+				t.Errorf("want:\n\t%v\ngot:\n\t%v", tc.want, result)
 			}
 		})
 	}
@@ -249,7 +249,7 @@ func TestDsvGetSecret(t *testing.T) {
 			accessToken: "token",
 			secretPath:  "folder1/secret1",
 			want:        nil,
-			wantErr:     fmt.Errorf("GET test.example.com/secrets/folder1/secret1: 400 Bad Request"),
+			wantErr:     fmt.Errorf("API call failed: GET test.example.com/secrets/folder1/secret1: 400 Bad Request"),
 		},
 		{
 			name: "http error",
@@ -277,17 +277,17 @@ func TestDsvGetSecret(t *testing.T) {
 			accessToken: "token",
 			secretPath:  "folder1/secret1",
 			want:        nil,
-			wantErr:     fmt.Errorf("could not unmarshal response body: unexpected end of JSON input"),
+			wantErr:     fmt.Errorf("API call failed: could not unmarshal response body: unexpected end of JSON input"),
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := dsvGetSecret(tc.client, tc.apiEndpoint, tc.accessToken, tc.secretPath)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
-				t.Errorf("want error %v, got %v", tc.wantErr, err)
+				t.Errorf("want error:\n\t%v\ngot:\n\t%v", tc.wantErr, err)
 			}
 			if !reflect.DeepEqual(tc.want, result) {
-				t.Errorf("want %v, got %v", tc.want, result)
+				t.Errorf("want:\n\t%v\ngot:\n\t%v", tc.want, result)
 			}
 		})
 	}
@@ -361,7 +361,7 @@ func TestOpenEnvFile(t *testing.T) {
 			}
 			_, err := openEnvFile(true)
 			if (tc.wantErr != nil && tc.wantErr.Error() != err.Error()) || (tc.wantErr == nil && err != nil) {
-				t.Errorf("want error %v, got %v", tc.wantErr, err)
+				t.Errorf("want error:\n\t%v\ngot:\n\t%v", tc.wantErr, err)
 			}
 		})
 	}
